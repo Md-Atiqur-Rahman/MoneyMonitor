@@ -8,7 +8,7 @@ using DailyAccount.Core.Services;
 
 namespace DailyAccount.App.ViewModels;
 
-public sealed record ItemRow(string Title, string Subtitle, string Amount);
+public sealed record ItemRow(string Title, string Subtitle, string Amount, System.Windows.Input.ICommand? Edit = null);
 
 public sealed record GroupRow(string Name, string Total, string CashCard, double Progress, List<ItemRow> Items);
 
@@ -73,7 +73,8 @@ public sealed partial class CategoryReportViewModel(FinanceService finance) : Vi
         var paidWith = t.Type == TransactionType.CardPurchase
             ? s.Cards.FirstOrDefault(c => c.Id == t.CardId)?.Name ?? Loc.T("CatReport_OnCard")
             : Display.AccountName(t.AccountId, s);
-        return new ItemRow(title, Fmt.DayMonth(t.Date) + " · " + paidWith, Fmt.Money(t.Amount));
+        return new ItemRow(title, Fmt.DayMonth(t.Date) + " · " + paidWith, Fmt.Money(t.Amount),
+            new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(() => Services.Ui.Go($"{AppShell.AddTransaction}?id={t.Id}")));
     }
 
     [RelayCommand]

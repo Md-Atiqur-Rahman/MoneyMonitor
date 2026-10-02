@@ -8,62 +8,93 @@
     xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
     x:DataType="vm:DuesViewModel">
 
-    <ScrollView>
+    <!-- Dues (ADR 0024): budget items not paid yet = the sheet's "Due" column (same total as Home),
+         then card & loan payments as a separate section that is not part of that total. -->
+    <ContentPage.Resources>
+        <DataTemplate x:Key="BudgetDueTemplate" x:DataType="vm:BudgetDueRow">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="6" Padding="8,10" Margin="-8,0">
+                <Grid.Triggers>
+                    <!-- Row opened from Budget → Due -->
+                    <DataTrigger TargetType="Grid" Binding="{Binding Highlight}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource InfoTint}" />
+                    </DataTrigger>
+                </Grid.Triggers>
+                <Label Text="{Binding Name}" FontAttributes="Bold" VerticalOptions="Center" />
+                <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                <Label Grid.Column="1" Text="{Binding Amount}" TextColor="{Binding AmountColor}" Style="{StaticResource Amount}" HorizontalOptions="End" VerticalOptions="Center" />
+                <Button Grid.Column="1" Grid.Row="1" Text="{Binding ActionText}" Command="{Binding Action}" IsVisible="{Binding HasAction}" Style="{StaticResource SmallOutline}" HorizontalOptions="End" />
+            </Grid>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <ScrollView x:Name="Scroller">
         <VerticalStackLayout Padding="20" Spacing="14">
 
-            <VerticalStackLayout>
-                <Label Text="{loc:Tr Dues_Title}" Style="{StaticResource Caption}" />
-                <Label Text="{Binding Model.MonthTitle}" Style="{StaticResource H1}" />
-            </VerticalStackLayout>
+            <!-- Month switcher (ADR 0025) -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                    <Label Text="{loc:Tr Dues_Title}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding Model.MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
 
-            <!-- Totals -->
+            <!-- The month's Due (same number as Home) -->
             <Border Style="{StaticResource Card}">
-                <VerticalStackLayout Spacing="10">
-                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
-                        <VerticalStackLayout>
-                            <Label Text="{loc:Tr Total}" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding Model.Total}" Style="{StaticResource Amount}" FontSize="17" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Column="1">
-                            <Label Text="{loc:Tr Paid}" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding Model.Paid}" Style="{StaticResource Amount}" FontSize="17" TextColor="{StaticResource Primary}" />
-                        </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Column="2">
-                            <Label Text="{loc:Tr Remaining}" Style="{StaticResource Caption}" />
-                            <Label Text="{Binding Model.Remaining}" Style="{StaticResource Amount}" FontSize="17" TextColor="{StaticResource Warn}" />
-                        </VerticalStackLayout>
-                    </Grid>
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{Binding Model.DueLabel}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding Model.Due}" FontSize="30" FontAttributes="Bold" TextColor="{StaticResource Warn}" />
                     <ProgressBar Progress="{Binding Model.Progress}" />
-                    <Label Text="{Binding Model.OverdueText}" Style="{StaticResource Muted}" TextColor="{StaticResource Warn}" IsVisible="{Binding Model.HasOverdue}" />
+                    <Label Text="{Binding Model.BudgetLine}" Style="{StaticResource Muted}" />
                 </VerticalStackLayout>
             </Border>
 
-            <!-- To pay (this month + overdue) -->
-            <Label Text="{loc:Tr Dues_Pending}" Style="{StaticResource Caption}" Margin="0,6,0,0" />
-            <Border Style="{StaticResource Card}" Padding="16,6">
+            <!-- Budget items not paid yet (+ non-card loans / dated personal dues) -->
+            <Label Text="{loc:Tr Dues_NotPaid}" Style="{StaticResource Caption}" Margin="0,6,0,0" />
+            <Border Style="{StaticResource Card}" Padding="16,4">
                 <VerticalStackLayout>
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.Pending}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
-                    <Label Text="{loc:Tr Dash_NoDues}" Style="{StaticResource Muted}" IsVisible="{Binding Model.PendingEmpty}" Padding="0,10" />
+                    <VerticalStackLayout x:Name="NotPaidList" BindableLayout.ItemsSource="{Binding Model.NotPaid}" BindableLayout.ItemTemplate="{StaticResource BudgetDueTemplate}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.OtherDues}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" IsVisible="{Binding Model.HasOtherDues}" />
+                    <Label Text="{loc:Tr Dash_NoDues}" Style="{StaticResource Muted}" IsVisible="{Binding Model.NothingDue}" Padding="0,10" />
                 </VerticalStackLayout>
             </Border>
 
-            <!-- Personal borrowing without a date -->
-            <Label Text="{loc:Tr Dues_NoDate}" Style="{StaticResource Caption}" Margin="0,6,0,0" IsVisible="{Binding Model.HasNoDate}" />
-            <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding Model.HasNoDate}">
-                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.NoDate}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
+            <!-- Fully paid budget items -->
+            <Label Text="{loc:Tr Dues_FullyPaid}" Style="{StaticResource Caption}" Margin="0,6,0,0" IsVisible="{Binding Model.HasFullyPaid}" />
+            <Border Style="{StaticResource Card}" Padding="16,4" IsVisible="{Binding Model.HasFullyPaid}">
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.FullyPaid}" BindableLayout.ItemTemplate="{StaticResource BudgetDueTemplate}" />
             </Border>
 
-            <!-- Paid -->
-            <Label Text="{loc:Tr Dues_PaidSection}" Style="{StaticResource Caption}" Margin="0,6,0,0" IsVisible="{Binding Model.HasPaid}" />
-            <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding Model.HasPaid}">
-                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.PaidRows}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
-            </Border>
+            <!-- ===== Card & loan payments: separate, not in the Due above ===== -->
+            <VerticalStackLayout Spacing="14" Margin="0,10,0,0" IsVisible="{Binding Model.HasCardSection}">
+                <BoxView Style="{StaticResource Divider}" />
+                <VerticalStackLayout Spacing="2">
+                    <Label Text="{loc:Tr Dues_CardLoans}" Style="{StaticResource H2}" />
+                    <Label Text="{loc:Tr Dues_CardLoansHint}" Style="{StaticResource Muted}" />
+                </VerticalStackLayout>
 
-            <!-- Next month -->
-            <Label Text="{Binding Model.NextMonthTitle}" Style="{StaticResource Caption}" Margin="0,6,0,0" IsVisible="{Binding Model.HasNextMonth}" />
-            <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding Model.HasNextMonth}">
-                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.NextMonth}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
-            </Border>
+                <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding Model.HasCardThisMonth}">
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.CardThisMonth}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
+                </Border>
+
+                <Label Text="{loc:Tr Dues_NoDate}" Style="{StaticResource Caption}" IsVisible="{Binding Model.HasNoDate}" />
+                <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding Model.HasNoDate}">
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.NoDate}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
+                </Border>
+
+                <Label Text="{loc:Tr Dues_PaidSection}" Style="{StaticResource Caption}" IsVisible="{Binding Model.HasCardPaid}" />
+                <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding Model.HasCardPaid}">
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.CardPaid}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
+                </Border>
+
+                <Label Text="{Binding Model.NextMonthTitle}" Style="{StaticResource Caption}" IsVisible="{Binding Model.HasNextMonth}" />
+                <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding Model.HasNextMonth}">
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.NextMonth}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
+                </Border>
+            </VerticalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>

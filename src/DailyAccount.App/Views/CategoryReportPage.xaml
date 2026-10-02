@@ -54,6 +54,9 @@
                                     <BindableLayout.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ItemRow">
                                             <Grid ColumnDefinitions="*,Auto" Padding="0,6">
+                                                <Grid.GestureRecognizers>
+                                                    <TapGestureRecognizer Command="{Binding Edit}" />
+                                                </Grid.GestureRecognizers>
                                                 <VerticalStackLayout>
                                                     <Label Text="{Binding Title}" />
                                                     <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" />

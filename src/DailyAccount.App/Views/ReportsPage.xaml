@@ -25,6 +25,9 @@
                              BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
             </Grid>
 
+            <!-- All entries of this month: edit / delete (ADR 0026) -->
+            <Button Text="{loc:Tr Entries_Open}" Command="{Binding OpenEntriesCommand}" Style="{StaticResource Outline}" />
+
             <!-- Cash flow -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="10">

@@ -35,6 +35,7 @@ public static class MauiProgram
         AddScreen<AddCardPage, AddCardViewModel>(builder.Services);
         AddScreen<CategoriesPage, CategoriesViewModel>(builder.Services);
         AddScreen<CategoryReportPage, CategoryReportViewModel>(builder.Services);
+        AddScreen<EntriesPage, EntriesViewModel>(builder.Services);
         AddScreen<SettingsPage, SettingsViewModel>(builder.Services);
 
 #if DEBUG

@@ -5,8 +5,10 @@ using DailyAccount.App.Services;
 
 namespace DailyAccount.App.ViewModels;
 
-public sealed partial class SettingsViewModel(AppSettings settings, BackupService backup) : ViewModelBase
+public sealed partial class SettingsViewModel(AppSettings settings, BackupService backup, DailyAccount.Core.Data.FinanceService finance) : ViewModelBase
 {
+    [ObservableProperty] private DateTime _startDate = DateTime.Today;
+    [ObservableProperty] private string _startText = "";
     [ObservableProperty] private bool _isEnglish;
     [ObservableProperty] private bool _isBangla;
     [ObservableProperty] private string _incomeText = "";
@@ -18,6 +20,8 @@ public sealed partial class SettingsViewModel(AppSettings settings, BackupServic
         IsBangla = Loc.IsBangla;
         IsEnglish = !Loc.IsBangla;
         IncomeText = settings.ExpectedIncome > 0 ? Fmt.EditableAmount(settings.ExpectedIncome) : "";
+        StartDate = settings.StartMonth is { } m ? DailyAccount.Core.MonthKey.FirstDay(m) : DateTime.Today;
+        StartText = settings.StartMonth is { } sm ? Loc.F("Settings_StartSet", Fmt.Month(sm)) : "";
         RefreshBackup();
         return Task.CompletedTask;
     }
@@ -35,6 +39,19 @@ public sealed partial class SettingsViewModel(AppSettings settings, BackupServic
         settings.Language = language;
         Loc.SetLanguage(language);
         App.ReloadShell();
+    }
+
+    /// <summary>First month of data (ADR 0025): every month from it to now gets a budget.</summary>
+    [RelayCommand]
+    private async Task SaveStart()
+    {
+        var start = DailyAccount.Core.MonthKey.Of(StartDate);
+        var current = DailyAccount.Core.MonthKey.Of(DateTime.Today);
+        if (string.CompareOrdinal(start, current) > 0) start = current;
+        settings.StartMonth = start;
+        await Ui.Try(() => finance.FillBudgetMonthsAsync(start, current));
+        StartText = Loc.F("Settings_StartSet", Fmt.Month(start));
+        await Ui.Alert(Loc.T("Saved"));
     }
 
     [RelayCommand]

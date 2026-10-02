@@ -37,6 +37,12 @@ public sealed record BudgetPlan(
     public long BudgetSpent => Lines.Sum(l => l.Spent);
     public long BudgetLeft => BudgetEstimate - BudgetSpent;
 
+    /// <summary>
+    /// The sheet's "Due" column: what is still to be paid on the budget items, estimate − spent per item.
+    /// An overspent item counts as 0, never as a minus (ADR 0024).
+    /// </summary>
+    public long UnpaidBudget => Lines.Where(l => l.InBudget && l.Left > 0).Sum(l => l.Left);
+
     /// <summary>The sheet's "Save" = Income − everything planned (dues + estimates). Negative = shortfall.</summary>
     public long Save => Income - TotalEstimate;
     public long NeedToBorrow => Math.Max(0, -Save);

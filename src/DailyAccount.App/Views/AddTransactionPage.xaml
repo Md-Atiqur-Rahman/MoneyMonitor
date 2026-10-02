@@ -8,13 +8,13 @@
     xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
     x:DataType="vm:AddTransactionViewModel"
     Shell.NavBarIsVisible="True"
-    Title="{loc:Tr AddTx_Title}">
+    Title="{Binding PageTitle}">
 
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="16">
 
             <!-- Type chips -->
-            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Types}">
+            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding VisibleTypes}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:ChipOption">
                         <Button Text="{Binding Label}" Command="{Binding SelectCommand}" Style="{StaticResource Chip}">
@@ -54,7 +54,7 @@
             </VerticalStackLayout>
 
             <!-- Item by item (expense / card) -->
-            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanUseItems}">
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowItemSwitch}">
                 <Label Text="{loc:Tr UseItems}" VerticalOptions="Center" />
                 <Switch Grid.Column="1" IsToggled="{Binding UseItems}" />
             </Grid>
@@ -89,7 +89,7 @@
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
                     <Grid ColumnDefinitions="*,Auto">
-                        <Button Text="{loc:Tr AddItemLine}" Command="{Binding AddLineCommand}" Style="{StaticResource SmallOutline}" HorizontalOptions="Start" />
+                        <Button Text="{loc:Tr AddItemLine}" Command="{Binding AddLineCommand}" Style="{StaticResource SmallOutline}" HorizontalOptions="Start" IsVisible="{Binding NotEditing}" />
                         <Label Grid.Column="1" Text="{Binding ItemsTotal}" FontAttributes="Bold" VerticalOptions="Center" />
                     </Grid>
                 </VerticalStackLayout>
@@ -147,6 +147,9 @@
             </VerticalStackLayout>
 
             <Button Text="{loc:Tr Save}" Command="{Binding SaveCommand}" Margin="0,8,0,0" />
+            <!-- Edit mode only (ADR 0026) -->
+            <Button Text="{loc:Tr Delete}" Command="{Binding DeleteEntryCommand}" IsVisible="{Binding IsEditing}"
+                    Style="{StaticResource Outline}" TextColor="{StaticResource Warn}" BorderColor="{StaticResource Warn}" />
 
         </VerticalStackLayout>
     </ScrollView>

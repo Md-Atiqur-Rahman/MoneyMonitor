@@ -28,6 +28,9 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0021](0021-delete-billed-card-purchase.md) | Deleting a card purchase that is already on a statement | Accepted |
 | [0022](0022-last-month-card-purchases-tab.md) | "Last month" tab for earlier card purchases | Accepted (layout changed by 0023) |
 | [0023](0023-liabilities-layout.md) | Liabilities layout: card on top, total owed at the bottom | Accepted |
+| [0024](0024-dues-page-is-the-budget-due.md) | The Dues page shows the budget "Due" (same total as Home) | Accepted |
+| [0025](0025-start-month-and-previous-months.md) | Start from any previous month; last month's impact on this month | Accepted |
+| [0026](0026-edit-entries.md) | Editing entries, and one list of all entries per month | Accepted |
 
 ## Template
 

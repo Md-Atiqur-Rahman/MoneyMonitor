@@ -43,6 +43,13 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     private readonly FinanceService _finance;
     private FinanceSnapshot? _snapshot;
     private string _type = "expense";
+    private int? _categoryId;
+    private long? _presetAmount;
+
+    // Edit mode (ADR 0026): ?id= opens an existing entry, filled in.
+    private int? _editId;
+    private bool _editLoaded;
+    private Transaction? _editing;
 
     public AddTransactionViewModel(FinanceService finance)
     {
@@ -77,6 +84,22 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     [ObservableProperty] private DateTime _date = DateTime.Today;
     [ObservableProperty] private string _note = "";
 
+    [ObservableProperty] private bool _isEditing;
+    [ObservableProperty] private string _pageTitle = Loc.T("AddTx_Title");
+    public bool NotEditing => !IsEditing;
+    public bool ShowItemSwitch => CanUseItems;
+
+    /// <summary>All six types when adding; in edit mode the four an entry can be (no Borrow/Lend).</summary>
+    public List<ChipOption> VisibleTypes => IsEditing
+        ? Types.Where(t => t.Key is "income" or "expense" or "card" or "transfer").ToList()
+        : Types;
+
+    partial void OnIsEditingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(NotEditing));
+        OnPropertyChanged(nameof(VisibleTypes));
+    }
+
     [ObservableProperty] private bool _showCategory;
     [ObservableProperty] private bool _showAccount;
     [ObservableProperty] private bool _showToAccount;
@@ -95,6 +118,11 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     partial void OnUseItemsChanged(bool value)
     {
         if (value && Lines.Count == 0) AddLine();
+        var first = Lines.FirstOrDefault();
+        if (value && first is not null && string.IsNullOrWhiteSpace(first.PriceText) && !string.IsNullOrWhiteSpace(AmountText))
+            first.PriceText = AmountText;
+        if (!value && string.IsNullOrWhiteSpace(AmountText) && first is not null && !string.IsNullOrWhiteSpace(first.PriceText))
+            AmountText = first.PriceText;
         OnPropertyChanged(nameof(ShowAmount));
         OnPropertyChanged(nameof(ShowItems));
     }
@@ -103,6 +131,7 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     {
         OnPropertyChanged(nameof(ShowAmount));
         OnPropertyChanged(nameof(ShowItems));
+        OnPropertyChanged(nameof(ShowItemSwitch));
     }
 
     partial void OnSelectedCategoryChanged(Option? value)
@@ -118,10 +147,18 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         if (query.TryGetValue("type", out var t) && t is string type) _type = type;
+        if (query.TryGetValue("id", out var e) && int.TryParse(e?.ToString(), out var editId)) _editId = editId;
+        if (query.TryGetValue("categoryId", out var c) && int.TryParse(c?.ToString(), out var categoryId)) _categoryId = categoryId;
+        if (query.TryGetValue("amount", out var a) && long.TryParse(a?.ToString(), out var amount) && amount > 0) _presetAmount = amount;
+        if (query.TryGetValue("date", out var d) && DateTime.TryParseExact(d?.ToString(), "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date))
+            Date = date; // a past month's expense from Dues (ADR 0025)
     }
 
     public override async Task LoadAsync()
     {
+        // Edit form already filled: keep what the user has changed when the page re-appears.
+        if (_editLoaded) return;
         _snapshot = await _finance.LoadAsync();
         Accounts = Display.AccountOptions(_snapshot);
         Cards = _snapshot.Cards.Select(c => new Option(c.Id, c.Name)).ToList();
@@ -129,6 +166,79 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
         SelectedToAccount ??= Accounts.Skip(1).FirstOrDefault();
         SelectedCard ??= Cards.FirstOrDefault();
         Select(Types.First(x => x.Key == _type));
+        if (_categoryId is { } id && Categories.FirstOrDefault(c => c.Id == id) is { } preset)
+        {
+            SelectedCategory = preset;
+            _categoryId = null; // only on first load, so the user's own choice is kept afterwards
+        }
+        // From Dues → "+ Expense": the amount left on that budget item, editable (ADR 0024 note).
+        if (_presetAmount is { } preset2)
+        {
+            AmountText = Fmt.EditableAmount(preset2);
+            _presetAmount = null;
+        }
+
+        if (_editId is { } id2 && !_editLoaded)
+        {
+            _editLoaded = true;
+            await LoadForEditAsync(id2);
+        }
+    }
+
+    private static string? KeyOf(TransactionType type) => type switch
+    {
+        TransactionType.Income => "income",
+        TransactionType.Expense => "expense",
+        TransactionType.CardPurchase => "card",
+        TransactionType.Transfer => "transfer",
+        _ => null
+    };
+
+    /// <summary>Fills the form with an existing entry (ADR 0026). Items/sub-categories use one item line.</summary>
+    private async Task LoadForEditAsync(int id)
+    {
+        var t = _snapshot!.Transactions.FirstOrDefault(x => x.Id == id);
+        if (t is null || KeyOf(t.Type) is not { } key)
+        {
+            await Ui.Alert(Loc.T("Err_EditNotAllowed"));
+            await Ui.Back();
+            return;
+        }
+
+        _editing = t;
+        IsEditing = true;
+        PageTitle = Loc.T("AddTx_EditTitle");
+        Select(Types.First(x => x.Key == key));
+
+        var category = _snapshot.Categories.FirstOrDefault(c => c.Id == t.CategoryId);
+        var topId = category?.ParentId ?? category?.Id;
+        SelectedCategory = Categories.FirstOrDefault(o => o.Id == topId) ?? SelectedCategory;
+        SelectedAccount = Accounts.FirstOrDefault(o => o.Id == t.AccountId) ?? SelectedAccount;
+        SelectedToAccount = Accounts.FirstOrDefault(o => o.Id == t.ToAccountId) ?? SelectedToAccount;
+        SelectedCard = Cards.FirstOrDefault(o => o.Id == t.CardId) ?? SelectedCard;
+        Date = t.Date;
+        Note = t.Note ?? "";
+
+        if (CanUseItems && (t.ItemName is not null || t.Quantity is not null || category?.ParentId is not null))
+        {
+            UseItems = true; // adds one line
+            var line = Lines[0];
+            line.SelectedSub = line.SubCategories.FirstOrDefault(o => o.Id == t.CategoryId) ?? line.SelectedSub;
+            line.Name = t.ItemName ?? "";
+            line.Quantity = t.Quantity ?? "";
+            line.PriceText = Fmt.EditableAmount(t.Amount);
+        }
+        else
+        {
+            AmountText = Fmt.EditableAmount(t.Amount);
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteEntry()
+    {
+        if (_editing is null || !await Ui.Confirm(Loc.T("Confirm_Delete"))) return;
+        if (await Ui.Try(() => _finance.DeleteTransactionAsync(_editing.Id))) await Ui.Back();
     }
 
     private void Select(ChipOption option)
@@ -163,10 +273,11 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
         if (_snapshot is not null)
         {
             var kind = _type == "income" ? CategoryKind.Income : CategoryKind.Expense;
+            var keep = SelectedCategory?.Id;
             Categories = _snapshot.TopCategories(kind)
                 .Select(c => new Option(c.Id, Display.CategoryName(c.Id, _snapshot)))
                 .ToList();
-            SelectedCategory = Categories.FirstOrDefault();
+            SelectedCategory = Categories.FirstOrDefault(c => c.Id == keep) ?? Categories.FirstOrDefault();
         }
     }
 
@@ -240,7 +351,17 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
 
         var ok = await Ui.Try(async () =>
         {
-            if (_type is "borrow" or "lend")
+            if (_editing is not null)
+            {
+                // Edit: one entry, from the amount box or the single item line (ADR 0026).
+                var line = Lines.FirstOrDefault();
+                var tx = ShowItems && line is not null
+                    ? Make(Fmt.ParseMoney(line.PriceText) ?? 0, line.SelectedSub?.Id ?? SelectedCategory?.Id, line.Name, line.Quantity)
+                    : Make(Fmt.ParseMoney(AmountText) ?? 0, SelectedCategory?.Id, null, null);
+                tx.Id = _editing.Id;
+                await _finance.UpdateTransactionAsync(tx);
+            }
+            else if (_type is "borrow" or "lend")
             {
                 await _finance.AddPersonalDebtAsync(new PersonalDebt
                 {

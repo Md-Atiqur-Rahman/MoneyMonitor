@@ -161,6 +161,96 @@ public sealed class FinanceServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Editing_an_expense_changes_amount_category_and_balance()
+    {
+        var (bank, _) = await SetUpOctoberAsync();
+        var s = await _svc.LoadAsync();
+        var food = s.Categories.Single(c => c.Name == "Bajar").Id;
+        var fish = s.Categories.Single(c => c.Name == "Fish").Id;
+        await _svc.AddTransactionAsync(new Transaction { Type = TransactionType.Expense, AccountId = bank.Id, CategoryId = food, Amount = Tk(500), Date = new DateTime(2026, 10, 3) });
+        var expense = (await _svc.LoadAsync()).Transactions.Single(t => t.Type == TransactionType.Expense);
+
+        expense.Amount = Tk(730);
+        expense.CategoryId = fish;
+        expense.ItemName = "Rui";
+        await _svc.UpdateTransactionAsync(expense);
+
+        s = await _svc.LoadAsync();
+        var saved = s.Transactions.Single(t => t.Id == expense.Id);
+        Assert.Equal(Tk(730), saved.Amount);
+        Assert.Equal(fish, saved.CategoryId);
+        Assert.Equal("Rui", saved.ItemName);
+        Assert.Equal(Tk(20_000 + 100_000 - 730), s.Balance(s.Accounts.Single()));
+    }
+
+    [Fact]
+    public async Task Editing_a_billed_card_purchase_updates_the_unpaid_bill()
+    {
+        await SetUpOctoberAsync(); // Sep purchase 3,000
+        await _svc.GenerateDuesAsync(new DateTime(2026, 10, 2));
+        var purchase = (await _svc.LoadAsync()).Transactions.Single(t => t.Type == TransactionType.CardPurchase);
+
+        purchase.Amount = Tk(2_500);
+        await _svc.UpdateTransactionAsync(purchase);
+
+        Assert.Equal(Tk(2_500), (await _svc.LoadAsync()).Dues.Single(d => d.SourceType == DueSource.Card).Amount);
+    }
+
+    [Fact]
+    public async Task Card_purchase_cannot_be_edited_below_what_its_bill_already_paid()
+    {
+        var (bank, _) = await SetUpOctoberAsync();
+        await _svc.GenerateDuesAsync(new DateTime(2026, 10, 2));
+        var s = await _svc.LoadAsync();
+        var bill = s.Dues.Single(d => d.SourceType == DueSource.Card);
+        await _svc.PayDueAsync(bill.Id, Tk(3_000), bank.Id, new DateTime(2026, 10, 10));
+
+        var purchase = s.Transactions.Single(t => t.Type == TransactionType.CardPurchase);
+        purchase.Amount = Tk(2_000);
+        Assert.Equal("Err_CardBilled", (await Assert.ThrowsAsync<FinanceException>(() => _svc.UpdateTransactionAsync(purchase))).Key);
+
+        purchase.Amount = Tk(3_200); // raising it is fine: the extra 200 becomes due
+        await _svc.UpdateTransactionAsync(purchase);
+        var updated = (await _svc.LoadAsync()).Dues.Single(d => d.SourceType == DueSource.Card);
+        Assert.Equal(Tk(200), updated.Remaining);
+        Assert.Equal(DueStatus.Partial, updated.Status);
+    }
+
+    [Fact]
+    public async Task Payments_and_kind_changes_cannot_be_edited()
+    {
+        var (bank, _) = await SetUpOctoberAsync();
+        var due = (await _svc.LoadAsync()).Dues.First(d => d.DueMonth == "2026-10");
+        await _svc.PayDueAsync(due.Id, Tk(100), bank.Id, new DateTime(2026, 10, 5));
+        var s = await _svc.LoadAsync();
+
+        var payment = s.Transactions.Single(t => t.Type == TransactionType.DuePayment);
+        payment.Amount = Tk(50);
+        Assert.Equal("Err_EditNotAllowed", (await Assert.ThrowsAsync<FinanceException>(() => _svc.UpdateTransactionAsync(payment))).Key);
+
+        var income = s.Transactions.Single(t => t.Type == TransactionType.Income);
+        income.Type = TransactionType.BorrowIn; // borrow/lend can't be made by editing
+        Assert.Equal("Err_EditNotAllowed", (await Assert.ThrowsAsync<FinanceException>(() => _svc.UpdateTransactionAsync(income))).Key);
+    }
+
+    [Fact]
+    public async Task An_expense_can_be_changed_into_a_card_purchase()
+    {
+        var (bank, card) = await SetUpOctoberAsync();
+        await _svc.AddTransactionAsync(new Transaction { Type = TransactionType.Expense, AccountId = bank.Id, Amount = Tk(950), Date = new DateTime(2026, 9, 25) });
+        await _svc.GenerateDuesAsync(new DateTime(2026, 10, 2)); // Sep statement: the 3,000 card purchase
+        var expense = (await _svc.LoadAsync()).Transactions.Single(t => t.Type == TransactionType.Expense);
+
+        expense.Type = TransactionType.CardPurchase;
+        expense.CardId = card.Id;
+        await _svc.UpdateTransactionAsync(expense);
+
+        var s = await _svc.LoadAsync();
+        Assert.Equal(Tk(3_950), s.Dues.Single(d => d.SourceType == DueSource.Card).Amount); // added to Sep bill
+        Assert.Equal(Tk(20_000 + 100_000), s.Balance(s.Accounts.Single()));                // no longer from the bank
+    }
+
+    [Fact]
     public async Task Purchase_on_a_paid_bill_cannot_be_deleted()
     {
         var (bank, _) = await SetUpOctoberAsync();

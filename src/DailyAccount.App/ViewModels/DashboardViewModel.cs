@@ -27,6 +27,13 @@ public sealed record DashboardModel(
     string NextSub,
     string Budget,
     string BudgetSub,
+    string PrevTitle,
+    string PrevSaved,
+    bool PrevSavedNegative,
+    string PrevSub,
+    string PrevCard,
+    string PrevCarried,
+    bool HasPrev,
     string Expenses,
     string ExpensesSub,
     string Due,
@@ -58,29 +65,21 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
         var today = DateTime.Today;
         var month = MonthKey.Of(today);
         await finance.GenerateDuesAsync(today);
-        await finance.EnsureBudgetAsync(month);
         await finance.ApplyDefaultBudgetAsync(month); // one time only (ADR 0020)
+        await finance.FillBudgetMonthsAsync(settings.StartMonth ?? month, month); // ADR 0025
         var s = await finance.LoadAsync();
 
         var plan = s.Plan(month, settings.ExpectedIncome);
+        var prev = s.Carry(MonthKey.Add(month, -1)); // what last month left for this one (ADR 0025)
         var (next, _, _) = s.NextMonthPlan(today, settings.ExpectedIncome);
         var sum = s.Summary(month);
 
-        // Due: everything payable up to this month that is NOT on a credit card (cards have their own row).
-        var cardDueIds = s.Cards.SelectMany(c => s.CardDues(c.Id)).Select(d => d.Id).ToHashSet();
-        var otherDues = s.Dues.Where(d => !cardDueIds.Contains(d.Id) && d.DueMonth.Length > 0
-                                          && string.CompareOrdinal(d.DueMonth, month) <= 0).ToList();
-        var unpaid = otherDues.Where(d => d.Status != DueStatus.Paid).ToList();
-
-        // Due = what is still unpaid in the budget, like the sheet's "Due" column (estimate − paid per
-        // item; an overspent item counts as 0), plus loans/personal dues that are not on a card.
-        // The card payment has its own row, so it is not included (ADR 0018 note).
-        var openItems = plan.Lines.Where(l => l.InBudget && l.Left > 0).ToList();
-        var budgetDue = openItems.Sum(l => l.Left);
-        var otherDue = unpaid.Sum(d => d.Remaining);
-        var dueSub = openItems.Count == 0 && otherDue == 0
+        // Due = unpaid budget items + unpaid non-card dues; the same Core calculation as the Dues page (ADR 0024).
+        var openItems = plan.Lines.Count(l => l.InBudget && l.Left > 0);
+        var otherDue = s.NonCardDuesUpTo(month).Sum(d => d.Remaining);
+        var dueSub = openItems == 0 && otherDue == 0
             ? Loc.T(plan.Lines.Any(l => l.InBudget) ? "Home_DueAllPaid" : "Home_DueNone")
-            : Loc.F("Home_DueBudget", Fmt.Number(openItems.Count))
+            : Loc.F("Home_DueBudget", Fmt.Number(openItems))
               + (otherDue > 0 ? " · " + Loc.F("Home_DueLoans", Fmt.Money(otherDue)) : "");
 
         var accounts = s.Accounts.Where(a => a.IsActive).ToList();
@@ -101,9 +100,18 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
                 : Loc.F("Home_NextSub", Fmt.Money(next.Lines.Sum(l => l.Estimate)), Fmt.Money(next.Income)),
             Budget: Fmt.Money(plan.BudgetEstimate),
             BudgetSub: Loc.F("Home_BudgetSub", Fmt.Money(plan.BudgetSpent), Fmt.Money(plan.BudgetLeft)),
+            PrevTitle: Loc.F("Home_PrevTitle", Fmt.MonthName(prev.Month)),
+            PrevSaved: Fmt.Money(prev.Saved),
+            PrevSavedNegative: prev.Saved < 0,
+            PrevSub: Loc.F("Home_PrevSub", Fmt.Money(prev.Income), Fmt.Money(prev.CashExpenses), Fmt.Money(prev.BillsPaid)),
+            PrevCard: Fmt.Money(prev.CardToNextBill),
+            PrevCarried: Fmt.Money(prev.CarriedDues),
+            // Shown from the start month on, or whenever last month has any activity.
+            HasPrev: string.CompareOrdinal(prev.Month, settings.StartMonth ?? month) >= 0
+                     || prev.Income + prev.CashExpenses + prev.BillsPaid + prev.CardToNextBill + prev.CarriedDues > 0,
             Expenses: Fmt.Money(sum.TotalSpending),
             ExpensesSub: Loc.F("CatReport_CashCard", Fmt.Money(sum.CashExpenses), Fmt.Money(sum.CardSpending)),
-            Due: Fmt.Money(budgetDue + otherDue),
+            Due: Fmt.Money(s.MonthDue(month, settings.ExpectedIncome)),
             DueSub: dueSub,
             Cards: s.Cards.Select(c => CardStatus(c, s, today, month)).ToList(),
             BankTotal: Fmt.Money(s.TotalBalance),
@@ -140,5 +148,7 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
     [RelayCommand] private Task OpenSettings() => Ui.Go(AppShell.Settings);
     [RelayCommand] private Task OpenReports() => Ui.Go(AppShell.Reports);
     [RelayCommand] private Task OpenBudget() => Shell.Current.GoToAsync("//budget");
+    [RelayCommand] private Task OpenDues() => Shell.Current.GoToAsync("//dues");
+    [RelayCommand] private Task OpenPrevDues() => Shell.Current.GoToAsync($"//dues?month={MonthKey.Add(MonthKey.Of(DateTime.Today), -1)}");
     [RelayCommand] private Task OpenAccounts() => Shell.Current.GoToAsync("//accounts");
 }

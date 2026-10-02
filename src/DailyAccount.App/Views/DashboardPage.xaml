@@ -106,10 +106,10 @@
                     </Grid>
                 </Border>
 
-                <!-- 3. Due = unpaid budget (+ non-card loans) → Budget, where each item's "Left" is shown -->
+                <!-- 3. Due = unpaid budget (+ non-card loans) → Dues page, which lists exactly these (ADR 0024) -->
                 <Border Style="{StaticResource Card}">
                     <Border.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding OpenBudgetCommand}" />
+                        <TapGestureRecognizer Command="{Binding OpenDuesCommand}" />
                     </Border.GestureRecognizers>
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
                         <VerticalStackLayout Spacing="2">
@@ -157,6 +157,30 @@
                         </VerticalStackLayout>
                         <Label Grid.Column="1" Text="{Binding Model.BankTotal}" Style="{StaticResource TileAmount}" TextColor="{StaticResource Primary}" VerticalOptions="Center" />
                         <Label Grid.Column="2" Style="{StaticResource Chevron}" />
+                    </Grid>
+                </Border>
+
+                <!-- Last month: what it left for this month (ADR 0025) → Dues of last month -->
+                <Border Style="{StaticResource Card}" IsVisible="{Binding Model.HasPrev}">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding OpenPrevDuesCommand}" />
+                    </Border.GestureRecognizers>
+                    <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="6">
+                        <Label Grid.ColumnSpan="2" Text="{Binding Model.PrevTitle}" Style="{StaticResource TileTitle}" />
+                        <Label Grid.Column="2" Grid.RowSpan="5" Style="{StaticResource Chevron}" />
+                        <Label Grid.Row="1" Text="{loc:Tr Home_PrevSaved}" VerticalOptions="Center" />
+                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Model.PrevSaved}" FontSize="18" FontAttributes="Bold" HorizontalOptions="End" TextColor="{StaticResource Primary}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding Model.PrevSavedNegative}" Value="True">
+                                    <Setter Property="TextColor" Value="{StaticResource Warn}" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                        <Label Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Model.PrevSub}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="3" Text="{loc:Tr Home_PrevCard}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="3" Grid.Column="1" Text="{Binding Model.PrevCard}" HorizontalOptions="End" />
+                        <Label Grid.Row="4" Text="{loc:Tr Home_PrevCarried}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="4" Grid.Column="1" Text="{Binding Model.PrevCarried}" HorizontalOptions="End" />
                     </Grid>
                 </Border>
 

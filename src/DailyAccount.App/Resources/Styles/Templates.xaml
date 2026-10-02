@@ -35,6 +35,10 @@
     <DataTemplate x:Key="TxRowTemplate" x:DataType="vm:TxRow">
         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,8">
             <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                <!-- Tap the text to edit the entry (ADR 0026) -->
+                <VerticalStackLayout.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding Edit}" />
+                </VerticalStackLayout.GestureRecognizers>
                 <Label Text="{Binding Title}" FontAttributes="Bold" LineBreakMode="TailTruncation" />
                 <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
             </VerticalStackLayout>

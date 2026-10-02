@@ -278,6 +278,75 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Month_due_is_unpaid_budget_plus_non_card_dues_and_ignores_overspending()
+    {
+        var cash = new Account { Name = "Cash", Type = AccountType.Cash, OpeningBalance = Tk(50_000) };
+        await _svc.AddAccountAsync(cash);
+        var (rent, bajar, _) = await BudgetCategoriesAsync();
+        var gas = (await _svc.LoadAsync()).Categories.Single(c => c.Name == "Gas").Id;
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", gas, Tk(1_700));
+        async Task Spend(int cat, decimal amount) => await _svc.AddTransactionAsync(new()
+            { Type = TransactionType.Expense, AccountId = cash.Id, CategoryId = cat, Amount = Tk(amount), Date = new DateTime(2026, 10, 2) });
+        await Spend(rent, 11_350);   // fully paid
+        await Spend(bajar, 830);     // 17,170 left
+        await Spend(gas, 2_000);     // overspent by 300 → counts as 0, not −300
+
+        // A loan that is not on a card is due too; a card EMI would not be.
+        await _svc.AddLoanAsync(new Loan { Lender = "Friend", TotalPayable = Tk(3_000), InstallmentCount = 3, StartMonth = "2026-10", DueDay = 20 });
+
+        var s = await _svc.LoadAsync();
+        Assert.Equal(Tk(17_170), s.Plan("2026-10", 0).UnpaidBudget);
+        Assert.Equal(Tk(1_000), Assert.Single(s.NonCardDuesUpTo("2026-10")).Remaining);
+        Assert.Equal(Tk(18_170), s.MonthDue("2026-10", 0));
+    }
+
+    [Fact]
+    public async Task Starting_earlier_fills_past_months_from_the_first_budget()
+    {
+        var (rent, bajar, eid) = await BudgetCategoriesAsync();
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", eid, Tk(5_000), onlyThisMonth: true);
+
+        Assert.Equal(2, await _svc.FillBudgetMonthsAsync("2026-08", "2026-10")); // Aug, Sep filled; Oct kept
+        Assert.Equal(0, await _svc.FillBudgetMonthsAsync("2026-08", "2026-10")); // idempotent
+
+        var s = await _svc.LoadAsync();
+        foreach (var m in new[] { "2026-08", "2026-09" })
+        {
+            var lines = s.Budget.Where(b => b.Month == m).ToList();
+            Assert.Equal(new[] { rent, bajar }.Order(), lines.Select(b => b.CategoryId).Order()); // one-off Eid not copied
+            Assert.Equal(Tk(29_350), lines.Sum(b => b.Estimate));
+        }
+        Assert.Equal(3, s.Budget.Count(b => b.Month == "2026-10"));
+    }
+
+    [Fact]
+    public async Task Carry_shows_actual_saving_card_purchases_and_unpaid_dues_of_a_month()
+    {
+        var bank = new Account { Name = "Bank A", Type = AccountType.Bank };
+        await _svc.AddAccountAsync(bank);
+        var card = new CreditCard { Name = "Card", StatementDay = 1, DueDay = 15 };
+        await _svc.AddCardAsync(card, new DateTime(2026, 9, 1));
+        var s = await _svc.LoadAsync();
+        var bajar = s.Categories.Single(c => c.Name == "Bajar").Id;
+
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.Income, AccountId = bank.Id, Amount = Tk(100_000), Date = new DateTime(2026, 9, 1) });
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.Expense, AccountId = bank.Id, CategoryId = bajar, Amount = Tk(30_000), Date = new DateTime(2026, 9, 5) });
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, CategoryId = bajar, Amount = Tk(2_559), Date = new DateTime(2026, 9, 18) });
+        await _svc.AddLoanAsync(new Loan { Lender = "Friend", TotalPayable = Tk(2_000), InstallmentCount = 2, StartMonth = "2026-09", DueDay = 20 });
+        var firstDue = (await _svc.LoadAsync()).Dues.Single(d => d.SourceType == DueSource.Loan && d.DueMonth == "2026-09");
+        await _svc.PayDueAsync(firstDue.Id, Tk(400), bank.Id, new DateTime(2026, 9, 20)); // partly paid
+
+        var carry = (await _svc.LoadAsync()).Carry("2026-09");
+        Assert.Equal(Tk(100_000 - 30_000 - 400), carry.Saved);   // actual: income − spent − bills paid
+        Assert.Equal(Tk(2_559), carry.CardToNextBill);            // on October's card bill
+        Assert.Equal(Tk(600), carry.CarriedDues);                 // unpaid, overdue in October
+    }
+
+    [Fact]
     public async Task Budget_edit_and_remove()
     {
         var s = await _svc.LoadAsync();

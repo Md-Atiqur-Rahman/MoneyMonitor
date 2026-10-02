@@ -99,6 +99,44 @@ public sealed class FinanceService(FinanceDatabase database)
         await Db.RunInTransactionAsync(c => c.InsertAll(lines));
     }
 
+    /// <summary>
+    /// Changes an existing income, expense, transfer or card purchase (ADR 0026). The kind can't change.
+    /// Bill payments and borrow/lend records can't be edited (delete and enter again). For a card purchase
+    /// on a statement, the statement follows the change, but never below what was already paid on it.
+    /// </summary>
+    public async Task UpdateTransactionAsync(Transaction updated)
+    {
+        var s = await LoadAsync();
+        var existing = s.Transactions.FirstOrDefault(x => x.Id == updated.Id) ?? throw new FinanceException("Err_NotFound");
+        // The kind may change between these four (e.g. an expense that was really a card purchase).
+        static bool Editable(TransactionType t) => t is TransactionType.Income or TransactionType.Expense
+            or TransactionType.Transfer or TransactionType.CardPurchase;
+        if (!Editable(existing.Type) || !Editable(updated.Type))
+            throw new FinanceException("Err_EditNotAllowed");
+        Validate(updated);
+
+        if (existing.Type == TransactionType.CardPurchase || updated.Type == TransactionType.CardPurchase)
+        {
+            // Check every statement the old or new version belongs to: the total after the change must
+            // still cover what was paid on it.
+            var after = s.Transactions.Where(t => t.Id != existing.Id).Append(updated).ToList();
+            foreach (var card in s.Cards.Where(c => c.Id == existing.CardId || c.Id == updated.CardId))
+            {
+                foreach (var statement in s.Dues.Where(d => d.SourceType == DueSource.Card && d.SourceId == card.Id && d.PaidAmount > 0))
+                {
+                    var total = after.Where(t => t.Type == TransactionType.CardPurchase && t.CardId == card.Id
+                            && LiabilityEngine.CycleStart(card, t.Date).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) == statement.PeriodKey)
+                        .Sum(t => t.Amount);
+                    if (total < statement.PaidAmount) throw new FinanceException("Err_CardBilled");
+                }
+            }
+        }
+
+        await Db.UpdateAsync(updated);
+        if (existing.Type == TransactionType.CardPurchase || updated.Type == TransactionType.CardPurchase)
+            await GenerateDuesAsync(DateTime.Today); // statements follow their purchases (ADR 0021)
+    }
+
     private static void Validate(Transaction t)
     {
         if (t.Amount <= 0) throw new FinanceException("Err_Amount");
@@ -380,6 +418,41 @@ public sealed class FinanceService(FinanceDatabase database)
 
         await Db.InsertAllAsync(copies);
         return true;
+    }
+
+    /// <summary>
+    /// Makes sure every month from <paramref name="fromMonth"/> to <paramref name="toMonth"/> has a budget
+    /// (ADR 0025), so data can start in an earlier month. A month without a budget gets the Monthly
+    /// lines of the nearest earlier month that has one; months before the first budget get the Monthly
+    /// lines of the first budget month (filled backwards). Months that already have a budget are kept.
+    /// Returns how many months were filled.
+    /// </summary>
+    public async Task<int> FillBudgetMonthsAsync(string fromMonth, string toMonth)
+    {
+        await database.InitAsync();
+        if (string.CompareOrdinal(fromMonth, toMonth) > 0) return 0;
+        var budget = await Db.Table<BudgetItem>().ToListAsync();
+        var filled = 0;
+        var inserts = new List<BudgetItem>();
+
+        for (var month = fromMonth; string.CompareOrdinal(month, toMonth) <= 0; month = MonthKey.Add(month, 1))
+        {
+            if (budget.Any(b => b.Month == month)) continue;
+            var source = budget.Where(b => string.CompareOrdinal(b.Month, month) < 0).GroupBy(b => b.Month).OrderByDescending(g => g.Key).FirstOrDefault()
+                         ?? budget.Where(b => string.CompareOrdinal(b.Month, month) > 0).GroupBy(b => b.Month).OrderBy(g => g.Key).FirstOrDefault();
+            if (source is null) continue;
+
+            var lines = source.Where(b => !b.OnlyThisMonth)
+                .Select(b => new BudgetItem { Month = month, CategoryId = b.CategoryId, Estimate = b.Estimate })
+                .ToList();
+            if (lines.Count == 0) continue;
+            inserts.AddRange(lines);
+            budget.AddRange(lines); // later months in the loop copy from this one
+            filled++;
+        }
+
+        if (inserts.Count > 0) await Db.InsertAllAsync(inserts);
+        return filled;
     }
 
     private const string DefaultBudgetKey = "default-budget-v1";

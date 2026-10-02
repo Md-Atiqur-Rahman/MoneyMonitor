@@ -3,6 +3,10 @@ using DailyAccount.Core.Services;
 
 namespace DailyAccount.Core.Data;
 
+/// <summary>What a month left behind for the next one (see <see cref="FinanceSnapshot.Carry"/>).</summary>
+public sealed record MonthCarry(string Month, long Income, long CashExpenses, long BillsPaid, long Saved,
+    long CardToNextBill, long CarriedDues);
+
 /// <summary>
 /// Everything in the database, loaded at once. A personal ledger holds a few thousand rows at most,
 /// so the screens compute from memory (see docs/adr/0004-core-owns-data-and-in-memory-snapshot.md).
@@ -98,6 +102,40 @@ public sealed record FinanceSnapshot(
     /// </summary>
     public long CardLimitUsed(CreditCard card, DateTime today) =>
         CardDues(card.Id).Sum(d => d.Remaining) + LiabilityEngine.UnbilledAmount(card, Transactions, today);
+
+    /// <summary>
+    /// Unpaid dues up to <paramref name="month"/> that are NOT billed on a credit card (other loans, dated
+    /// personal borrowing). Together with <see cref="BudgetPlan.UnpaidBudget"/> they make the month's
+    /// "Due" shown on Home and on the Dues page (ADR 0024).
+    /// </summary>
+    public List<Due> NonCardDuesUpTo(string month)
+    {
+        var cardDueIds = Cards.SelectMany(c => CardDues(c.Id)).Select(d => d.Id).ToHashSet();
+        return Dues.Where(d => !cardDueIds.Contains(d.Id) && d.DueMonth.Length > 0
+                               && string.CompareOrdinal(d.DueMonth, month) <= 0 && d.Status != DueStatus.Paid)
+            .OrderBy(d => d.DueDate)
+            .ToList();
+    }
+
+    /// <summary>The month's "Due": unpaid budget + unpaid non-card dues (ADR 0024).</summary>
+    public long MonthDue(string month, long expectedIncome) =>
+        Plan(month, expectedIncome).UnpaidBudget + NonCardDuesUpTo(month).Sum(d => d.Remaining);
+
+    /// <summary>
+    /// How a finished month carries into the next one (ADR 0025), from what really happened (actual,
+    /// not the plan): Saved = income − bills paid − cash/bank expenses; CardToNextBill = that month's card
+    /// purchases (they are on the next month's card bill); CarriedDues = dues of that month or earlier
+    /// that are still unpaid (they show as overdue now).
+    /// </summary>
+    public MonthCarry Carry(string month)
+    {
+        var summary = Summary(month);
+        var carried = Dues.Where(d => d.DueMonth.Length > 0 && string.CompareOrdinal(d.DueMonth, month) <= 0
+                                      && d.Status != DueStatus.Paid)
+            .Sum(d => d.Remaining);
+        return new MonthCarry(month, summary.Income, summary.CashExpenses, summary.DuePaid, summary.Savings,
+            summary.CardSpending, carried);
+    }
 
     // ---------- Categories ----------
 

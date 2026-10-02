@@ -20,6 +20,13 @@ public sealed class AppSettings
         set => _prefs.Set("expected_income", value);
     }
 
+    /// <summary>"yyyy-MM": the first month the user enters data for (ADR 0025). null = not set (current month).</summary>
+    public string? StartMonth
+    {
+        get => _prefs.Get<string?>("start_month", null);
+        set => _prefs.Set("start_month", value);
+    }
+
     public DateTime? LastBackup
     {
         get => _prefs.Get("last_backup", 0L) is var ticks and > 0 ? new DateTime(ticks) : null;

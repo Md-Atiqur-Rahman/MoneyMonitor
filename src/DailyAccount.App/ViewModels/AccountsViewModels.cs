@@ -42,9 +42,12 @@ public sealed partial class AddAccountViewModel : ViewModelBase, IQueryAttributa
     private Account? _editing;
     private int? _editId;
 
-    public AddAccountViewModel(FinanceService finance)
+    public AddAccountViewModel(FinanceService finance, AppSettings settings)
     {
         _finance = finance;
+        // With a start month, the opening balance is the balance on its 1st day (ADR 0025).
+        if (settings.StartMonth is { } start)
+            OpeningLabel = Loc.F("OpeningOn", Fmt.Date(Core.MonthKey.FirstDay(start)));
         Types =
         [
             new(nameof(AccountType.Bank), Loc.T("AccountType_Bank"), Select),
@@ -73,7 +76,7 @@ public sealed partial class AddAccountViewModel : ViewModelBase, IQueryAttributa
         if (_editing is null) return;
 
         Title = Loc.T("EditAccount_Title");
-        OpeningLabel = Loc.T("Opening");
+        if (OpeningLabel == Loc.T("OpeningBalance")) OpeningLabel = Loc.T("Opening");
         Name = _editing.Name;
         OpeningText = Fmt.EditableAmount(_editing.OpeningBalance);
         Select(Types.First(t => t.Key == _editing.Type.ToString()));
@@ -103,7 +106,7 @@ public sealed partial class AddAccountViewModel : ViewModelBase, IQueryAttributa
     }
 }
 
-public sealed partial class AccountDetailViewModel(FinanceService finance) : ViewModelBase, IQueryAttributable
+public sealed partial class AccountDetailViewModel(FinanceService finance, AppSettings settings) : ViewModelBase, IQueryAttributable
 {
     private int _accountId;
 
@@ -126,7 +129,8 @@ public sealed partial class AccountDetailViewModel(FinanceService finance) : Vie
 
         Name = account.Name;
         Balance = Fmt.Money(s.Balance(account));
-        Opening = Loc.T("Opening") + ": " + Fmt.Money(account.OpeningBalance);
+        Opening = (settings.StartMonth is { } start ? Loc.F("OpeningOn", Fmt.Date(Core.MonthKey.FirstDay(start))) : Loc.T("Opening"))
+                  + ": " + Fmt.Money(account.OpeningBalance);
         Rows = s.Transactions
             .Where(t => t.AccountId == _accountId || t.ToAccountId == _accountId)
             .OrderByDescending(t => t.Date).ThenByDescending(t => t.Id)

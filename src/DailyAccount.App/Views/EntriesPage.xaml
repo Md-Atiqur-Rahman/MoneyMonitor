@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.EntriesPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:EntriesViewModel"
+    Shell.NavBarIsVisible="True"
+    Title="{loc:Tr Entries_Title}">
+
+    <!-- All entries of a month (ADR 0026): tap to edit, 🗑 to delete -->
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                    <Label Text="{loc:Tr Entries_Title}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
+
+            <Label Text="{Binding Summary}" Style="{StaticResource Muted}" HorizontalOptions="Center" />
+            <Label Text="{loc:Tr Entries_TapHint}" Style="{StaticResource Muted}" TextColor="{StaticResource Info}" HorizontalOptions="Center" />
+
+            <Border Style="{StaticResource Card}" Padding="16,6">
+                <VerticalStackLayout>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" BindableLayout.ItemTemplate="{StaticResource TxRowTemplate}" />
+                    <Label Text="{loc:Tr Entries_Empty}" Style="{StaticResource Muted}" IsVisible="{Binding IsEmpty}" Padding="0,10" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

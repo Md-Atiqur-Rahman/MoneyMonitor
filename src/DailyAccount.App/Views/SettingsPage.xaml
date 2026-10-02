@@ -38,6 +38,21 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- My data starts from (ADR 0025) -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{loc:Tr Settings_StartMonth}" Style="{StaticResource Caption}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Border Style="{StaticResource Field}">
+                            <DatePicker Date="{Binding StartDate}" Format="MMMM yyyy" />
+                        </Border>
+                        <Button Grid.Column="1" Text="{loc:Tr Save}" Command="{Binding SaveStartCommand}" />
+                    </Grid>
+                    <Label Text="{Binding StartText}" FontAttributes="Bold" />
+                    <Label Text="{loc:Tr Settings_StartHint}" Style="{StaticResource Muted}" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Expected income -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">

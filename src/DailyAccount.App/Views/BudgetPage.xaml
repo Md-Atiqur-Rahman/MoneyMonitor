@@ -16,8 +16,11 @@
                     <TapGestureRecognizer Command="{Binding Tap}" />
                 </Grid.GestureRecognizers>
                 <Label Text="{Binding Name}" FontAttributes="Bold" />
-                <Label Grid.Column="1" Text="{Binding Left}" TextColor="{Binding LeftColor}" FontAttributes="Bold" HorizontalOptions="End" />
-                <Label Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Muted}">
+                <HorizontalStackLayout Grid.Column="1" Grid.RowSpan="2" Spacing="8" HorizontalOptions="End" VerticalOptions="Start">
+                    <Label Text="{Binding Left}" TextColor="{Binding LeftColor}" FontAttributes="Bold" VerticalOptions="Center" />
+                    <Button Text="{loc:Tr Budget_DueButton}" Command="{Binding Due}" IsVisible="{Binding HasDue}" Style="{StaticResource SmallOutline}" HeightRequest="34" MinimumHeightRequest="34" Padding="12,0" />
+                </HorizontalStackLayout>
+                <Label Grid.Row="1" Style="{StaticResource Muted}">
                     <Label.FormattedText>
                         <FormattedString>
                             <Span Text="{loc:Tr Budget_Estimate}" />

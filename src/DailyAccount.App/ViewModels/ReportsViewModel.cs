@@ -86,6 +86,9 @@ public sealed partial class ReportsViewModel(FinanceService finance) : ViewModel
     }
 
     [RelayCommand]
+    private Task OpenEntries() => Services.Ui.Go($"{AppShell.Entries}?month={_month}");
+
+    [RelayCommand]
     private Task Previous()
     {
         _month = MonthKey.Add(_month, -1);

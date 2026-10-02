@@ -16,7 +16,7 @@ public sealed record DueRow(string Title, string Subtitle, string Amount, string
 }
 
 /// <summary>One transaction in a history list. <see cref="Delete"/> removes it after a confirm.</summary>
-public sealed record TxRow(string Title, string Subtitle, string Amount, Color AmountColor, ICommand Delete);
+public sealed record TxRow(string Title, string Subtitle, string Amount, Color AmountColor, ICommand Delete, ICommand? Edit = null);
 
 /// <summary>A labelled value with a 0–1 bar (report categories, trend). <see cref="Tap"/> opens a drill-down.</summary>
 public sealed record BarRow(string Label, string Amount, double Progress, Color BarColor, ICommand? Tap = null)
@@ -166,11 +166,25 @@ public static class Display
         var subtitle = Fmt.Date(t.Date) + " · " + (titledByText ? CategoryName(t.CategoryId, s) : Loc.T($"Tx_{t.Type}"));
         if (!string.IsNullOrWhiteSpace(t.Note) && title != t.Note) subtitle += " · " + t.Note;
 
-        var effect = accountId is { } id ? BalanceService(id, t) : -t.Amount;
-        var amount = (effect > 0 ? "+" : effect < 0 ? "−" : "") + Fmt.Money(Math.Abs(effect));
+        // From an account: its balance change. In a general list: + money in, − money out, ↔ transfer.
+        var effect = accountId is { } id ? BalanceService(id, t) : t.Type switch
+        {
+            TransactionType.Income or TransactionType.BorrowIn or TransactionType.LendReturn => t.Amount,
+            TransactionType.Transfer => 0,
+            _ => -t.Amount
+        };
+        var amount = effect == 0 && t.Type == TransactionType.Transfer
+            ? "↔ " + Fmt.Money(t.Amount)
+            : (effect > 0 ? "+" : effect < 0 ? "−" : "") + Fmt.Money(Math.Abs(effect));
+
+        // Income, expenses, transfers and card purchases open the edit form when tapped (ADR 0026).
+        ICommand? editCommand = t.Type is TransactionType.Income or TransactionType.Expense
+                or TransactionType.Transfer or TransactionType.CardPurchase
+            ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.AddTransaction}?id={t.Id}"))
+            : null;
 
         return new TxRow(title, subtitle, amount, effect > 0 ? Positive : Negative,
-            new AsyncRelayCommand(() => delete(t)));
+            new AsyncRelayCommand(() => delete(t)), editCommand);
     }
 
     private static long BalanceService(int accountId, Transaction t) =>

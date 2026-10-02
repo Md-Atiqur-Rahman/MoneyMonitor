@@ -11,9 +11,10 @@ using DailyAccount.Core.Services;
 namespace DailyAccount.App.ViewModels;
 
 /// <summary>One line of the budget table: Estimate / Spent / Left, like the sheet.</summary>
-public sealed record BudgetRow(string Name, string Subtitle, string Estimate, string Spent, string Left, Color LeftColor, ICommand Tap)
+public sealed record BudgetRow(string Name, string Subtitle, string Estimate, string Spent, string Left, Color LeftColor, ICommand Tap, ICommand? Due = null)
 {
     public bool HasSubtitle => Subtitle.Length > 0;
+    public bool HasDue => Due is not null;
 }
 
 /// <summary>Next month's plan, shown under the current month's budget (moved here from Home, ADR 0018).</summary>
@@ -58,10 +59,12 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
     {
         var today = DateTime.Today;
         await finance.GenerateDuesAsync(today);
-        // New months start from last month's estimates; past months are left as they were.
-        if (string.CompareOrdinal(_month, MonthKey.Of(today)) >= 0)
-            await finance.EnsureBudgetAsync(_month);
-        await finance.ApplyDefaultBudgetAsync(MonthKey.Of(today)); // one time only (ADR 0020)
+        var current = MonthKey.Of(today);
+        await finance.ApplyDefaultBudgetAsync(current); // one time only (ADR 0020)
+        // Every month from the start month to the viewed one has a budget (ADR 0025).
+        var start = settings.StartMonth ?? current;
+        if (string.CompareOrdinal(_month, start) >= 0)
+            await finance.FillBudgetMonthsAsync(start, string.CompareOrdinal(_month, current) > 0 ? _month : current);
 
         var s = _snapshot = await finance.LoadAsync();
         var plan = s.Plan(_month, settings.ExpectedIncome);
@@ -141,7 +144,11 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
             string.Join(" · ", notes),
             Fmt.Money(line.Estimate), Fmt.Money(line.Spent), Fmt.Money(line.Left),
             line.Left < 0 ? Display.Warn : Display.Negative,
-            new AsyncRelayCommand(() => EditLineAsync(line)));
+            new AsyncRelayCommand(() => EditLineAsync(line)),
+            // Due → the Dues page, scrolled to this item's row (current month only; ADR 0024 note).
+            line.InBudget && line.Left > 0 && string.CompareOrdinal(_month, MonthKey.Of(DateTime.Today)) <= 0
+                ? new AsyncRelayCommand(() => Shell.Current.GoToAsync($"//dues?focus={line.CategoryId}&month={_month}"))
+                : null);
     }
 
     /// <summary>Change amount, switch "every month" / "only this month", or remove (ADR 0019).</summary>

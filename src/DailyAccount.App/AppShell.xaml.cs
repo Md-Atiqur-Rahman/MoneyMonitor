@@ -15,6 +15,7 @@ public partial class AppShell : Shell
     public const string Reports = "report";
     public const string Categories = "categories";
     public const string CategoryReport = "categoryreport"; // ?id=&month=yyyy-MM
+    public const string Entries = "entries";               // ?month=yyyy-MM
 
     public AppShell()
     {
@@ -29,5 +30,6 @@ public partial class AppShell : Shell
         Routing.RegisterRoute(Reports, typeof(ReportsPage));
         Routing.RegisterRoute(Categories, typeof(CategoriesPage));
         Routing.RegisterRoute(CategoryReport, typeof(CategoryReportPage));
+        Routing.RegisterRoute(Entries, typeof(EntriesPage));
     }
 }
