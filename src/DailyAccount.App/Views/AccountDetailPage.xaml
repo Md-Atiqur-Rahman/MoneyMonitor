@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.AccountDetailPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:AccountDetailViewModel"
+    Shell.NavBarIsVisible="True"
+    Title="{Binding Name}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="4">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{Binding Name}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="{loc:Tr Edit}" Command="{Binding EditCommand}" Style="{StaticResource SmallOutline}" />
+                    </Grid>
+                    <Label Text="{Binding Balance}" FontSize="30" FontAttributes="Bold" />
+                    <Label Text="{Binding Opening}" Style="{StaticResource Muted}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="{loc:Tr History}" Style="{StaticResource H2}" />
+            <Border Style="{StaticResource Card}" Padding="16,6">
+                <VerticalStackLayout>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}" BindableLayout.ItemTemplate="{StaticResource TxRowTemplate}" />
+                    <Label Text="{loc:Tr NoTransactions}" Style="{StaticResource Muted}" IsVisible="{Binding IsEmpty}" Padding="0,10" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

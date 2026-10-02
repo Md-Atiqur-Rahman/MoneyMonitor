@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.CategoryReportPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:CategoryReportViewModel"
+    Shell.NavBarIsVisible="True"
+    Title="{Binding Title}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <!-- Month switcher -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                    <Label Text="{Binding Model.Title}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding Model.MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
+
+            <!-- Total -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="{loc:Tr Total}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding Model.Total}" FontSize="30" FontAttributes="Bold" />
+                    <Label Text="{Binding Model.CashCard}" Style="{StaticResource Muted}" />
+                    <Label Text="{Binding Model.BudgetText}" Style="{StaticResource Muted}" TextColor="{StaticResource Info}" IsVisible="{Binding Model.HasBudget}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="{loc:Tr CatReport_Empty}" Style="{StaticResource Muted}" IsVisible="{Binding Model.IsEmpty}" />
+
+            <!-- One card per group, with its items -->
+            <VerticalStackLayout Spacing="12" BindableLayout.ItemsSource="{Binding Model.Groups}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GroupRow">
+                        <Border Style="{StaticResource Card}">
+                            <VerticalStackLayout Spacing="6">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Text="{Binding Name}" Style="{StaticResource H2}" />
+                                    <Label Grid.Column="1" Text="{Binding Total}" Style="{StaticResource Amount}" FontSize="16" />
+                                </Grid>
+                                <ProgressBar Progress="{Binding Progress}" />
+                                <Label Text="{Binding CashCard}" Style="{StaticResource Muted}" />
+                                <BoxView Style="{StaticResource Divider}" Margin="0,4" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Items}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ItemRow">
+                                            <Grid ColumnDefinitions="*,Auto" Padding="0,6">
+                                                <VerticalStackLayout>
+                                                    <Label Text="{Binding Title}" />
+                                                    <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                                                </VerticalStackLayout>
+                                                <Label Grid.Column="1" Text="{Binding Amount}" VerticalOptions="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

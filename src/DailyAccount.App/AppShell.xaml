@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="DailyAccount.App.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    Shell.NavBarIsVisible="False">
+
+    <!-- Android shows at most five tabs; Reports opens from Home (ADR 0011). -->
+    <TabBar>
+        <ShellContent Title="{loc:Tr Tab_Home}" Icon="tab_home.png" ContentTemplate="{DataTemplate views:DashboardPage}" Route="home" />
+        <ShellContent Title="{loc:Tr Tab_Budget}" Icon="tab_budget.png" ContentTemplate="{DataTemplate views:BudgetPage}" Route="budget" />
+        <ShellContent Title="{loc:Tr Tab_Dues}" Icon="tab_dues.png" ContentTemplate="{DataTemplate views:DuesPage}" Route="dues" />
+        <ShellContent Title="{loc:Tr Tab_Accounts}" Icon="tab_accounts.png" ContentTemplate="{DataTemplate views:AccountsPage}" Route="accounts" />
+        <ShellContent Title="{loc:Tr Tab_Liabilities}" Icon="tab_liabilities.png" ContentTemplate="{DataTemplate views:LiabilitiesPage}" Route="liabilities" />
+    </TabBar>
+
+</Shell>

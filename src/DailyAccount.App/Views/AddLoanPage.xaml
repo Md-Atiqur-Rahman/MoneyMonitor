@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.AddLoanPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:AddLoanViewModel"
+    Shell.NavBarIsVisible="True"
+    Title="{loc:Tr AddLoan_Title}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{loc:Tr Lender}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Entry Text="{Binding Lender}" Placeholder="{loc:Tr Ph_LoanName}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{loc:Tr LoanCard}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding Cards}" SelectedItem="{Binding SelectedCard}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{loc:Tr TotalPayable}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Entry Text="{Binding TotalText}" Keyboard="Numeric" Placeholder="{loc:Tr Ph_LoanTotal}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="{loc:Tr Installments}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}">
+                        <Entry Text="{Binding InstallmentsText}" Keyboard="Numeric" Placeholder="{loc:Tr Ph_Installments}" />
+                    </Border>
+                </VerticalStackLayout>
+                <VerticalStackLayout Grid.Column="1" Spacing="6">
+                    <Label Text="{loc:Tr PaidBefore}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}">
+                        <Entry Text="{Binding PaidBeforeText}" Keyboard="Numeric" />
+                    </Border>
+                </VerticalStackLayout>
+            </Grid>
+
+            <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource InfoTint}">
+                <Border.Triggers>
+                    <DataTrigger TargetType="Border" Binding="{Binding Preview}" Value="">
+                        <Setter Property="IsVisible" Value="False" />
+                    </DataTrigger>
+                </Border.Triggers>
+                <Label Text="{Binding Preview}" TextColor="{StaticResource Info}" FontAttributes="Bold" />
+            </Border>
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{loc:Tr NextInstallment}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <DatePicker Date="{Binding NextDate}" Format="d MMM yyyy" />
+                </Border>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{loc:Tr PayFrom}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding Accounts}" SelectedItem="{Binding PayFrom}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <Button Text="{loc:Tr Save}" Command="{Binding SaveCommand}" Margin="0,8,0,0" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

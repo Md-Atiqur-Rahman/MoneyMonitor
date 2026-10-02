@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.AddTransactionPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:AddTransactionViewModel"
+    Shell.NavBarIsVisible="True"
+    Title="{loc:Tr AddTx_Title}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <!-- Type chips -->
+            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Types}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ChipOption">
+                        <Button Text="{Binding Label}" Command="{Binding SelectCommand}" Style="{StaticResource Chip}">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button" Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
+                                    <Setter Property="TextColor" Value="White" />
+                                    <Setter Property="BorderColor" Value="{StaticResource Ink}" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </FlexLayout>
+
+            <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource InfoTint}">
+                <Label Text="{Binding Hint}" TextColor="{StaticResource Info}" FontSize="14" />
+            </Border>
+
+            <!-- Person (borrow / lend) -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowPerson}">
+                <Label Text="{loc:Tr PersonName}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Entry Text="{Binding PersonName}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- Category -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowCategory}">
+                <Label Text="{loc:Tr Category}" Style="{StaticResource Caption}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Border Style="{StaticResource Field}">
+                        <Picker ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" />
+                    </Border>
+                    <Button Grid.Column="1" Text="{loc:Tr NewCategoryButton}" Command="{Binding NewCategoryCommand}" Style="{StaticResource SmallOutline}" VerticalOptions="Center" />
+                </Grid>
+            </VerticalStackLayout>
+
+            <!-- Item by item (expense / card) -->
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanUseItems}">
+                <Label Text="{loc:Tr UseItems}" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding UseItems}" />
+            </Grid>
+
+            <!-- Amount (single entry) -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding ShowAmount}">
+                <VerticalStackLayout Spacing="2">
+                    <Label Text="{loc:Tr Amount}" Style="{StaticResource Caption}" />
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                        <Label Text="৳" FontSize="32" FontAttributes="Bold" TextColor="{StaticResource Muted}" VerticalOptions="Center" />
+                        <Entry Grid.Column="1" Text="{Binding AmountText}" Keyboard="Numeric" FontSize="34" FontAttributes="Bold" Placeholder="0" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Item lines -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding ShowItems}" Padding="12">
+                <VerticalStackLayout Spacing="10">
+                    <VerticalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding Lines}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ItemLine">
+                                <Border Stroke="{StaticResource Line}" StrokeShape="RoundRectangle 12" Padding="10,6" BackgroundColor="{StaticResource Ground}">
+                                    <Grid ColumnDefinitions="*,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                                        <Picker Grid.ColumnSpan="2" ItemsSource="{Binding SubCategories}" SelectedItem="{Binding SelectedSub}" Title="{loc:Tr SubCategory}" FontSize="14" />
+                                        <ImageButton Grid.Column="2" Source="close.png" Command="{Binding RemoveCommand}" WidthRequest="36" HeightRequest="36" Padding="9" BackgroundColor="Transparent" SemanticProperties.Description="{loc:Tr Delete}" />
+                                        <Entry Grid.Row="1" Text="{Binding Name}" Placeholder="{loc:Tr ItemName}" FontSize="15" />
+                                        <Entry Grid.Row="1" Grid.Column="1" Text="{Binding Quantity}" Placeholder="{loc:Tr Qty}" FontSize="15" />
+                                        <Entry Grid.Row="1" Grid.Column="2" Text="{Binding PriceText}" Placeholder="{loc:Tr Price}" Keyboard="Numeric" FontSize="15" WidthRequest="90" FontAttributes="Bold" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Button Text="{loc:Tr AddItemLine}" Command="{Binding AddLineCommand}" Style="{StaticResource SmallOutline}" HorizontalOptions="Start" />
+                        <Label Grid.Column="1" Text="{Binding ItemsTotal}" FontAttributes="Bold" VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Card -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowCard}">
+                <Label Text="{loc:Tr Card}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding Cards}" SelectedItem="{Binding SelectedCard}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- Account -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowAccount}">
+                <Label Text="{Binding AccountLabel}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- Transfer target -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowToAccount}">
+                <Label Text="{loc:Tr ToAccount}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedToAccount}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- Date -->
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{loc:Tr Date}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <DatePicker Date="{Binding Date}" Format="d MMM yyyy" />
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- Return date (borrow) -->
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowReturnDate}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="{loc:Tr SetReturnDate}" VerticalOptions="Center" />
+                    <Switch Grid.Column="1" IsToggled="{Binding HasReturnDate}" />
+                </Grid>
+                <Border Style="{StaticResource Field}" IsVisible="{Binding HasReturnDate}">
+                    <DatePicker Date="{Binding ReturnDate}" Format="d MMM yyyy" />
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- Note -->
+            <VerticalStackLayout Spacing="6">
+                <Label Text="{loc:Tr Note}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Entry Text="{Binding Note}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <Button Text="{loc:Tr Save}" Command="{Binding SaveCommand}" Margin="0,8,0,0" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

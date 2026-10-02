@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<?xaml-comp compile="true" ?>
+<!-- Row templates shared by several screens. -->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels">
+
+    <!-- A due: title (+ "Last" pill), date, amount, Pay button or status. -->
+    <DataTemplate x:Key="DueRowTemplate" x:DataType="vm:DueRow">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="6" Padding="0,10">
+            <!-- Star column so a long title wraps instead of running under the amount. -->
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <Label Text="{Binding Title}" FontAttributes="Bold" LineBreakMode="WordWrap" VerticalOptions="Center" />
+                <Border Grid.Column="1" IsVisible="{Binding IsLast}" BackgroundColor="{StaticResource PrimaryTint}" StrokeThickness="0" StrokeShape="RoundRectangle 10" Padding="8,2" VerticalOptions="Center">
+                    <Label Text="{loc:Tr Last}" FontSize="11" FontAttributes="Bold" TextColor="{StaticResource PrimaryDark}" />
+                </Border>
+            </Grid>
+            <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" VerticalOptions="Center" />
+            <Label Grid.Column="1" Text="{Binding Amount}" Style="{StaticResource Amount}" HorizontalOptions="End" VerticalOptions="Center" />
+            <Button Grid.Column="1" Grid.Row="1" Text="{Binding PayText}" Command="{Binding Pay}" IsVisible="{Binding CanPay}" Style="{StaticResource Small}" HorizontalOptions="End" />
+            <Label Grid.Column="1" Grid.Row="1" Text="{Binding Status}" IsVisible="{Binding IsPaid}" TextColor="{StaticResource Primary}" FontAttributes="Bold" FontSize="13" HorizontalOptions="End">
+                <Label.Triggers>
+                    <!-- Next month's dues: grey "Upcoming", not a green status -->
+                    <DataTrigger TargetType="Label" Binding="{Binding Upcoming}" Value="True">
+                        <Setter Property="TextColor" Value="{StaticResource Muted}" />
+                    </DataTrigger>
+                </Label.Triggers>
+            </Label>
+        </Grid>
+    </DataTemplate>
+
+    <!-- A transaction in a history list, with delete. -->
+    <DataTemplate x:Key="TxRowTemplate" x:DataType="vm:TxRow">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Padding="0,8">
+            <VerticalStackLayout VerticalOptions="Center" Spacing="2">
+                <Label Text="{Binding Title}" FontAttributes="Bold" LineBreakMode="TailTruncation" />
+                <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
+            </VerticalStackLayout>
+            <Label Grid.Column="1" Text="{Binding Amount}" TextColor="{Binding AmountColor}" Style="{StaticResource Amount}" VerticalOptions="Center" />
+            <ImageButton Grid.Column="2" Source="trash.png" Command="{Binding Delete}" WidthRequest="40" HeightRequest="40" Padding="10" BackgroundColor="Transparent" SemanticProperties.Description="{loc:Tr Delete}" />
+        </Grid>
+    </DataTemplate>
+
+    <!-- A labelled bar (report categories and trend). -->
+    <DataTemplate x:Key="BarRowTemplate" x:DataType="vm:BarRow">
+        <VerticalStackLayout Spacing="4" Padding="0,6">
+            <VerticalStackLayout.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding Tap}" />
+            </VerticalStackLayout.GestureRecognizers>
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                <Label Text="{Binding Label}" />
+                <Label Grid.Column="1" Text="{Binding Amount}" />
+                <Label Grid.Column="2" Text="›" FontSize="18" TextColor="{StaticResource Muted}" IsVisible="{Binding HasTap}" VerticalOptions="Center" />
+            </Grid>
+            <ProgressBar Progress="{Binding Progress}" ProgressColor="{Binding BarColor}" />
+        </VerticalStackLayout>
+    </DataTemplate>
+
+</ResourceDictionary>

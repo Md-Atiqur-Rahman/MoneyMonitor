@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.LiabilitiesPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:LiabilitiesViewModel">
+
+    <ContentPage.Resources>
+        <Style x:Key="Seg" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="Transparent" />
+            <Setter Property="TextColor" Value="{StaticResource Ink}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="CornerRadius" Value="20" />
+            <Setter Property="HeightRequest" Value="40" />
+            <Setter Property="MinimumHeightRequest" Value="40" />
+            <Setter Property="Padding" Value="4,0" />
+        </Style>
+
+        <DataTemplate x:Key="DebtTemplate" x:DataType="vm:DebtRow">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Padding="0,10" RowSpacing="6">
+                <Label Text="{Binding Name}" FontAttributes="Bold" />
+                <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                <Label Grid.Column="1" Text="{Binding Remaining}" TextColor="{Binding RemainingColor}" Style="{StaticResource Amount}" HorizontalOptions="End" />
+                <Button Grid.Row="1" Grid.Column="1" Text="{Binding ActionText}" Command="{Binding Action}" IsVisible="{Binding CanAct}" Style="{StaticResource Small}" HorizontalOptions="End" />
+            </Grid>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <Label Text="{loc:Tr Liab_Title}" Style="{StaticResource H1}" />
+
+            <!-- Total owed, by kind -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Liab_TotalOwe}" Style="{StaticResource Caption}" />
+                    <Label Text="{Binding TotalOwe}" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource Warn}" />
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                        <VerticalStackLayout>
+                            <VerticalStackLayout.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="1" />
+                            </VerticalStackLayout.GestureRecognizers>
+                            <Label Text="{loc:Tr Cards}" Style="{StaticResource Muted}" TextDecorations="Underline" />
+                            <Label Text="{Binding CardsOwe}" FontAttributes="Bold" FontSize="13" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1">
+                            <VerticalStackLayout.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="0" />
+                            </VerticalStackLayout.GestureRecognizers>
+                            <Label Text="{loc:Tr Loans}" Style="{StaticResource Muted}" TextDecorations="Underline" />
+                            <Label Text="{Binding LoansOwe}" FontAttributes="Bold" FontSize="13" />
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="2">
+                            <VerticalStackLayout.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="2" />
+                            </VerticalStackLayout.GestureRecognizers>
+                            <Label Text="{loc:Tr Personal}" Style="{StaticResource Muted}" TextDecorations="Underline" />
+                            <Label Text="{Binding PersonalOwe}" FontAttributes="Bold" FontSize="13" />
+                        </VerticalStackLayout>
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Section switch -->
+            <Border BackgroundColor="{StaticResource Surface}" Stroke="{StaticResource Line}" StrokeShape="RoundRectangle 24" Padding="4">
+                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="2">
+                    <Button Grid.Column="0" Text="{loc:Tr Cards}" Command="{Binding ShowSectionCommand}" CommandParameter="1" Style="{StaticResource Seg}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding ShowCards}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
+                                <Setter Property="TextColor" Value="White" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Grid.Column="1" Text="{loc:Tr Liab_LastMonth}" Command="{Binding ShowSectionCommand}" CommandParameter="3" Style="{StaticResource Seg}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding ShowPast}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
+                                <Setter Property="TextColor" Value="White" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Grid.Column="2" Text="{loc:Tr Loans}" Command="{Binding ShowSectionCommand}" CommandParameter="0" Style="{StaticResource Seg}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding ShowLoans}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
+                                <Setter Property="TextColor" Value="White" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Grid.Column="3" Text="{loc:Tr Personal}" Command="{Binding ShowSectionCommand}" CommandParameter="2" Style="{StaticResource Seg}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding ShowOther}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
+                                <Setter Property="TextColor" Value="White" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- ===== Loans ===== -->
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowLoans}">
+                <VerticalStackLayout Spacing="12" BindableLayout.ItemsSource="{Binding Loans}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LoanRow">
+                            <Border Style="{StaticResource Card}">
+                                <VerticalStackLayout Spacing="10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <VerticalStackLayout>
+                                            <Label Text="{Binding Title}" Style="{StaticResource H2}" />
+                                            <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                                        </VerticalStackLayout>
+                                        <ImageButton Grid.Column="1" Source="trash.png" Command="{Binding Delete}" IsVisible="{Binding CanDelete}"
+                                                     WidthRequest="40" HeightRequest="40" Padding="10" BackgroundColor="Transparent"
+                                                     SemanticProperties.Description="{loc:Tr Delete}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <Label Text="{Binding ProgressText}" FontAttributes="Bold" FontSize="13" />
+                                        <Label Grid.Column="1" Text="{Binding Remaining}" Style="{StaticResource Muted}" />
+                                    </Grid>
+                                    <ProgressBar Progress="{Binding Progress}" />
+                                    <Label Text="{Binding NextText}" FontSize="14" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+                <Button Text="{loc:Tr AddLoan}" Command="{Binding AddLoanCommand}" Style="{StaticResource Outline}" />
+            </VerticalStackLayout>
+
+            <!-- ===== Cards ===== -->
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowCards}">
+                <VerticalStackLayout Spacing="16" BindableLayout.ItemsSource="{Binding Cards}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CardRow">
+                            <VerticalStackLayout Spacing="12">
+                                <!-- Card face: limit -->
+                                <Border BackgroundColor="{StaticResource Info}" StrokeThickness="0" StrokeShape="RoundRectangle 20" Padding="20,16">
+                                    <VerticalStackLayout Spacing="8">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <Label Text="{Binding Name}" TextColor="White" FontSize="17" FontAttributes="Bold" VerticalOptions="Center" />
+                                            <Button Grid.Column="1" Text="{loc:Tr Edit}" Command="{Binding Edit}" Style="{StaticResource Small}" BackgroundColor="#2D5694" />
+                                        </Grid>
+                                        <Label Text="{Binding Subtitle}" TextColor="#C8D6EE" FontSize="13" />
+                                        <Label Text="{Binding Available}" TextColor="White" FontSize="20" FontAttributes="Bold" />
+                                        <ProgressBar Progress="{Binding UsedProgress}" ProgressColor="White" />
+                                        <Label Text="{Binding LimitText}" TextColor="#C8D6EE" FontSize="13" />
+                                    </VerticalStackLayout>
+                                </Border>
+
+                                <!-- This month: EMIs + last month's purchases -->
+                                <Border Style="{StaticResource Card}">
+                                    <VerticalStackLayout Spacing="6">
+                                        <Label Text="{loc:Tr Card_ThisMonth}" Style="{StaticResource Caption}" />
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <Label Text="{Binding ThisMonth}" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource Warn}" VerticalOptions="Center" />
+                                            <Button Grid.Column="1" Text="{loc:Tr Card_PayBill}" Command="{Binding Pay}" IsVisible="{Binding CanPay}" Style="{StaticResource Small}" />
+                                        </Grid>
+                                        <Label Text="{Binding ThisMonthSub}" Style="{StaticResource Muted}" IsVisible="{Binding CanPay}" />
+                                        <!-- Purchases on this bill: one total line; tap → "Last month" tab (ADR 0022) -->
+                                        <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0" IsVisible="{Binding HasBillPurchases}">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding ShowBillPurchases}" />
+                                            </Grid.GestureRecognizers>
+                                            <VerticalStackLayout>
+                                                <Label Text="{loc:Tr Card_BillPurchases}" Style="{StaticResource Caption}" />
+                                                <Label Text="{Binding BillPurchases}" FontAttributes="Bold" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="1" Text="›" FontSize="24" TextColor="{StaticResource Muted}" VerticalOptions="Center" />
+                                        </Grid>
+                                        <BoxView Style="{StaticResource Divider}" Margin="0,6" />
+                                        <!-- Next month so far: tap → Loans tab (the EMIs), ADR 0022 note -->
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <Grid.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding ShowLoans}" />
+                                            </Grid.GestureRecognizers>
+                                            <VerticalStackLayout Spacing="2">
+                                                <Label Text="{loc:Tr Card_NextMonth}" Style="{StaticResource Caption}" />
+                                                <Label Text="{Binding NextMonth}" FontSize="18" FontAttributes="Bold" />
+                                                <Label Text="{Binding NextMonthSub}" Style="{StaticResource Muted}" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="1" Text="›" FontSize="24" TextColor="{StaticResource Muted}" VerticalOptions="Center" />
+                                        </Grid>
+                                    </VerticalStackLayout>
+                                </Border>
+
+                                <!-- EMIs on this card -->
+                                <Border Style="{StaticResource Card}" IsVisible="{Binding HasEmis}">
+                                    <VerticalStackLayout Spacing="4">
+                                        <Label Text="{loc:Tr Card_Emis}" Style="{StaticResource Caption}" />
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Emis}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:EmiRow">
+                                                    <Grid ColumnDefinitions="*,Auto" Padding="0,6">
+                                                        <VerticalStackLayout>
+                                                            <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                                            <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                                        </VerticalStackLayout>
+                                                        <Label Grid.Column="1" Text="{Binding Amount}" Style="{StaticResource Amount}" VerticalOptions="Center" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </VerticalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+
+                                <!-- Purchases this cycle -->
+                                <Border Style="{StaticResource Card}" Padding="16,8" IsVisible="{Binding HasPurchases}">
+                                    <VerticalStackLayout>
+                                        <Label Text="{loc:Tr Card_Purchases}" Style="{StaticResource Caption}" Margin="0,6,0,0" />
+                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Purchases}" BindableLayout.ItemTemplate="{StaticResource TxRowTemplate}" />
+                                    </VerticalStackLayout>
+                                </Border>
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+                <Button Text="{loc:Tr AddCard}" Command="{Binding AddCardCommand}" Style="{StaticResource Outline}" />
+            </VerticalStackLayout>
+
+            <!-- ===== Card purchases of earlier months (ADR 0022) ===== -->
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowPast}">
+                <Label Text="{loc:Tr Liab_LastMonthHint}" Style="{StaticResource Muted}" />
+                <Label Text="{loc:Tr Dues_Nothing}" Style="{StaticResource Muted}" IsVisible="{Binding PastEmpty}" />
+                <VerticalStackLayout Spacing="12" BindableLayout.ItemsSource="{Binding PastPurchases}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PurchaseGroup">
+                            <Border Style="{StaticResource Card}" Padding="16,12">
+                                <VerticalStackLayout Spacing="4">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <Label Text="{Binding Title}" Style="{StaticResource H2}" />
+                                        <Label Grid.Column="1" Text="{Binding Total}" Style="{StaticResource Amount}" FontSize="16" />
+                                    </Grid>
+                                    <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                                    <BoxView Style="{StaticResource Divider}" Margin="0,4" />
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Items}" BindableLayout.ItemTemplate="{StaticResource TxRowTemplate}" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+
+            <!-- ===== Personal ===== -->
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowOther}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="{loc:Tr Borrowed_Section}" Style="{StaticResource H2}" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="{loc:Tr Borrow}" Command="{Binding BorrowCommand}" Style="{StaticResource SmallOutline}" />
+                </Grid>
+                <Border Style="{StaticResource Card}" Padding="16,6">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Borrowed}" BindableLayout.ItemTemplate="{StaticResource DebtTemplate}" />
+                        <Label Text="{loc:Tr Dues_Nothing}" Style="{StaticResource Muted}" IsVisible="{Binding BorrowedEmpty}" Padding="0,10" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                    <Label Text="{loc:Tr Lent_Section}" Style="{StaticResource H2}" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="{loc:Tr Lend}" Command="{Binding LendCommand}" Style="{StaticResource SmallOutline}" />
+                </Grid>
+                <Border Style="{StaticResource Card}" Padding="16,6">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Lent}" BindableLayout.ItemTemplate="{StaticResource DebtTemplate}" />
+                        <Label Text="{loc:Tr Dues_Nothing}" Style="{StaticResource Muted}" IsVisible="{Binding LentEmpty}" Padding="0,10" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

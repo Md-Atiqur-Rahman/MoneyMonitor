@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.AccountsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:AccountsViewModel">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="{loc:Tr Accounts_Title}" Style="{StaticResource H1}" VerticalOptions="Center" />
+                <Button Grid.Column="1" Text="{loc:Tr AddAccount}" Command="{Binding AddCommand}" Style="{StaticResource SmallOutline}" />
+            </Grid>
+
+            <Border BackgroundColor="{StaticResource Ink}" StrokeThickness="0" StrokeShape="RoundRectangle 20" Padding="20">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="{loc:Tr TotalSavings}" TextColor="#C9D0CB" FontSize="13" />
+                    <Label Text="{Binding Total}" TextColor="White" FontSize="32" FontAttributes="Bold" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="{loc:Tr Dash_Welcome}" Style="{StaticResource Muted}" IsVisible="{Binding IsEmpty}" />
+
+            <VerticalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding Accounts}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:AccountRow">
+                        <Border Style="{StaticResource Card}">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding Open}" />
+                            </Border.GestureRecognizers>
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                <Border BackgroundColor="{Binding BadgeBg}" StrokeThickness="0" StrokeShape="RoundRectangle 12" WidthRequest="48" HeightRequest="44">
+                                    <Label Text="{Binding Badge}" TextColor="{Binding BadgeFg}" FontSize="11" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
+                                </Border>
+                                <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
+                                    <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                    <Label Text="{Binding TypeText}" Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="2" Text="{Binding Balance}" Style="{StaticResource Amount}" VerticalOptions="Center" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

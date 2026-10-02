@@ -1,0 +1,627 @@
+using DailyAccount.Core.Models;
+using DailyAccount.Core.Services;
+using SQLite;
+
+namespace DailyAccount.Core.Data;
+
+/// <summary>
+/// Every read and write the app does. Multi-row writes run in one SQLite transaction so a crash
+/// never leaves, say, a payment without its Due update. Rule violations throw <see cref="FinanceException"/>.
+/// </summary>
+public sealed class FinanceService(FinanceDatabase database)
+{
+    private SQLiteAsyncConnection Db => database.Connection;
+
+    public async Task<FinanceSnapshot> LoadAsync()
+    {
+        await database.InitAsync();
+        return new FinanceSnapshot(
+            await Db.Table<Account>().ToListAsync(),
+            await Db.Table<Category>().ToListAsync(),
+            await Db.Table<Transaction>().ToListAsync(),
+            await Db.Table<Loan>().ToListAsync(),
+            await Db.Table<CreditCard>().ToListAsync(),
+            await Db.Table<RecurringBill>().ToListAsync(),
+            await Db.Table<PersonalDebt>().ToListAsync(),
+            await Db.Table<Due>().ToListAsync(),
+            await Db.Table<BudgetItem>().ToListAsync());
+    }
+
+    /// <summary>
+    /// Creates any missing card statements and recurring-bill dues (through next month).
+    /// Safe to call on every app start: generation is idempotent.
+    /// </summary>
+    public async Task<int> GenerateDuesAsync(DateTime today)
+    {
+        var s = await LoadAsync();
+        var newDues = new List<Due>();
+        var updated = new List<Due>();
+        var removed = new List<Due>();
+        foreach (var card in s.Cards)
+        {
+            // Existing statements follow late-entered or deleted purchases (ADR 0021).
+            var (u, r) = LiabilityEngine.ReconcileCardStatements(card, s.Transactions, s.Dues);
+            updated.AddRange(u);
+            removed.AddRange(r);
+            newDues.AddRange(LiabilityEngine.BuildCardStatements(card, s.Transactions, s.Dues, today));
+        }
+        var throughMonth = MonthKey.Add(MonthKey.Of(today), 1);
+        foreach (var bill in s.Bills)
+            newDues.AddRange(LiabilityEngine.BuildBillDues(bill, s.Dues, throughMonth));
+
+        if (newDues.Count + updated.Count + removed.Count > 0)
+        {
+            await Db.RunInTransactionAsync(c =>
+            {
+                foreach (var d in updated) c.Update(d);
+                foreach (var d in removed) c.Delete(d);
+                c.InsertAll(newDues);
+            });
+        }
+        return newDues.Count;
+    }
+
+    // ---------- Accounts ----------
+
+    public async Task AddAccountAsync(Account account)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(account.Name)) throw new FinanceException("Err_Name");
+        account.Name = account.Name.Trim();
+        await Db.InsertAsync(account);
+    }
+
+    /// <summary>Rename or correct the opening balance of an account.</summary>
+    public async Task UpdateAccountAsync(Account account)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(account.Name)) throw new FinanceException("Err_Name");
+        account.Name = account.Name.Trim();
+        if (await Db.UpdateAsync(account) == 0) throw new FinanceException("Err_NotFound");
+    }
+
+    // ---------- Day-to-day transactions ----------
+
+    /// <summary>Income, Expense, Transfer or CardPurchase. Liability flows have their own methods.</summary>
+    public async Task AddTransactionAsync(Transaction t)
+    {
+        await database.InitAsync();
+        Validate(t);
+        await Db.InsertAsync(t);
+    }
+
+    /// <summary>Several lines of one shopping trip (Rice 5kg 450, Eggs 30 380…) saved together (ADR 0013).</summary>
+    public async Task AddTransactionsAsync(IReadOnlyCollection<Transaction> lines)
+    {
+        await database.InitAsync();
+        if (lines.Count == 0) throw new FinanceException("Err_Amount");
+        foreach (var t in lines) Validate(t);
+        await Db.RunInTransactionAsync(c => c.InsertAll(lines));
+    }
+
+    private static void Validate(Transaction t)
+    {
+        if (t.Amount <= 0) throw new FinanceException("Err_Amount");
+        t.ItemName = string.IsNullOrWhiteSpace(t.ItemName) ? null : t.ItemName.Trim();
+        t.Quantity = string.IsNullOrWhiteSpace(t.Quantity) ? null : t.Quantity.Trim();
+
+        switch (t.Type)
+        {
+            case TransactionType.Income:
+            case TransactionType.Expense:
+                if (t.AccountId is null) throw new FinanceException("Err_Account");
+                t.CardId = null;
+                t.ToAccountId = null;
+                break;
+            case TransactionType.Transfer:
+                if (t.AccountId is null || t.ToAccountId is null) throw new FinanceException("Err_Account");
+                if (t.AccountId == t.ToAccountId) throw new FinanceException("Err_SameAccount");
+                t.CardId = null;
+                t.CategoryId = null;
+                break;
+            case TransactionType.CardPurchase:
+                if (t.CardId is null) throw new FinanceException("Err_Card");
+                t.AccountId = null;
+                t.ToAccountId = null;
+                break;
+            default:
+                throw new FinanceException("Err_Type");
+        }
+    }
+
+    /// <summary>
+    /// Deletes a transaction and undoes its effects. A due payment gives the amount back to the Due.
+    /// A card purchase already on a statement reduces that statement, as long as enough of the statement
+    /// is still unpaid; a statement that drops to 0 is removed (ADR 0021). Borrow/lend records can't be
+    /// deleted here.
+    /// </summary>
+    public async Task DeleteTransactionAsync(int transactionId)
+    {
+        var s = await LoadAsync();
+        var t = s.Transactions.FirstOrDefault(x => x.Id == transactionId) ?? throw new FinanceException("Err_NotFound");
+
+        switch (t.Type)
+        {
+            case TransactionType.DuePayment:
+                var due = s.Dues.FirstOrDefault(d => d.Id == t.DueId);
+                await Db.RunInTransactionAsync(c =>
+                {
+                    if (due is not null)
+                    {
+                        due.PaidAmount = Math.Max(0, due.PaidAmount - t.Amount);
+                        due.Status = due.PaidAmount == 0 ? DueStatus.Pending
+                            : due.PaidAmount >= due.Amount ? DueStatus.Paid : DueStatus.Partial;
+                        c.Update(due);
+                    }
+                    c.Delete(t);
+                });
+                return;
+
+            case TransactionType.CardPurchase:
+                var card = s.Cards.FirstOrDefault(c => c.Id == t.CardId);
+                var key = card is null ? null
+                    : LiabilityEngine.CycleStart(card, t.Date).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                var statement = s.Dues.FirstOrDefault(d => d.SourceType == DueSource.Card && d.SourceId == card?.Id && d.PeriodKey == key);
+                if (statement is null) break; // not billed yet: just delete it
+
+                // Billed: take it off the statement, but never below what was already paid on it.
+                if (statement.Remaining < t.Amount) throw new FinanceException("Err_CardBilled");
+                await Db.RunInTransactionAsync(c =>
+                {
+                    statement.Amount -= t.Amount;
+                    if (statement.Amount == 0)
+                        c.Delete(statement);
+                    else
+                    {
+                        statement.Status = statement.PaidAmount == 0 ? DueStatus.Pending
+                            : statement.PaidAmount >= statement.Amount ? DueStatus.Paid : DueStatus.Partial;
+                        c.Update(statement);
+                    }
+                    c.Delete(t);
+                });
+                return;
+
+            case TransactionType.BorrowIn:
+            case TransactionType.LendOut:
+                throw new FinanceException("Err_DeleteDebtTx");
+        }
+
+        await Db.DeleteAsync(t);
+    }
+
+    // ---------- Loans ----------
+
+    /// <summary>Saves the loan and its full installment schedule in one go.</summary>
+    public async Task<Loan> AddLoanAsync(Loan loan)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(loan.Lender)) throw new FinanceException("Err_Name");
+        if (loan.TotalPayable <= 0) throw new FinanceException("Err_Amount");
+        if (loan.InstallmentCount is < 1 or > 600) throw new FinanceException("Err_Installments");
+        if (loan.InstallmentsPaidBefore < 0 || loan.InstallmentsPaidBefore >= loan.InstallmentCount)
+            throw new FinanceException("Err_PaidBefore");
+        if (loan.Principal <= 0) loan.Principal = loan.TotalPayable;
+        loan.Lender = loan.Lender.Trim();
+
+        await Db.RunInTransactionAsync(c =>
+        {
+            c.Insert(loan);
+            c.InsertAll(LiabilityEngine.BuildLoanSchedule(loan));
+        });
+        return loan;
+    }
+
+    /// <summary>Removes a loan only if no payment was made in the app (to fix a typo).</summary>
+    public async Task DeleteLoanAsync(int loanId)
+    {
+        var s = await LoadAsync();
+        var dues = s.Dues.Where(d => d.SourceType == DueSource.Loan && d.SourceId == loanId).ToList();
+        var dueIds = dues.Select(d => d.Id).ToHashSet();
+        if (s.Transactions.Any(t => t.DueId is { } id && dueIds.Contains(id))) throw new FinanceException("Err_LoanHasPayments");
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var d in dues) c.Delete(d);
+            c.Delete<Loan>(loanId);
+        });
+    }
+
+    // ---------- Credit cards ----------
+
+    public async Task AddCardAsync(CreditCard card, DateTime today)
+    {
+        await database.InitAsync();
+        ValidateCard(card);
+        await Db.InsertAsync(card);
+        await GenerateDuesAsync(today);
+    }
+
+    /// <summary>Edit name, limit, days or paying account. Existing statements keep their dates.</summary>
+    public async Task UpdateCardAsync(CreditCard card)
+    {
+        await database.InitAsync();
+        ValidateCard(card);
+        if (await Db.UpdateAsync(card) == 0) throw new FinanceException("Err_NotFound");
+    }
+
+    private static void ValidateCard(CreditCard card)
+    {
+        if (string.IsNullOrWhiteSpace(card.Name)) throw new FinanceException("Err_Name");
+        if (card.StatementDay is < 1 or > 28 || card.DueDay is < 1 or > 31) throw new FinanceException("Err_Day");
+        if (card.CreditLimit < 0) throw new FinanceException("Err_Amount");
+        card.Name = card.Name.Trim();
+    }
+
+    /// <summary>
+    /// Pays the card bill for <paramref name="month"/>: unpaid statements and card EMIs up to that month,
+    /// oldest first. One DuePayment per Due, so deleting a payment still restores exactly that Due.
+    /// </summary>
+    public async Task PayCardBillAsync(int cardId, string month, long amount, int accountId, DateTime date)
+    {
+        var s = await LoadAsync();
+        if (amount <= 0) throw new FinanceException("Err_Amount");
+        var bill = s.CardBillDues(cardId, month);
+        if (amount > bill.Sum(d => d.Remaining)) throw new FinanceException("Err_TooMuch");
+
+        var payments = new List<Transaction>();
+        var left = amount;
+        foreach (var due in bill)
+        {
+            if (left == 0) break;
+            var part = Math.Min(left, due.Remaining);
+            payments.Add(LiabilityEngine.ApplyPayment(due, part, accountId, date));
+            left -= part;
+        }
+
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var due in bill) c.Update(due);
+            c.InsertAll(payments);
+        });
+    }
+
+    // ---------- Categories ----------
+
+    /// <summary>Adds a category (or a sub-category when <paramref name="parentId"/> is set). Names are unique per parent.</summary>
+    public async Task<Category> AddCategoryAsync(string name, CategoryKind kind, int? parentId)
+    {
+        var s = await LoadAsync();
+        if (string.IsNullOrWhiteSpace(name)) throw new FinanceException("Err_Name");
+        name = name.Trim();
+
+        if (parentId is { } pid)
+        {
+            var parent = s.Categories.FirstOrDefault(c => c.Id == pid) ?? throw new FinanceException("Err_NotFound");
+            if (parent.ParentId is not null) throw new FinanceException("Err_SubOfSub");
+            kind = parent.Kind;
+        }
+        if (s.Categories.Any(c => c.ParentId == parentId && c.Kind == kind && string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new FinanceException("Err_CategoryExists");
+
+        var category = new Category
+        {
+            Name = name, Kind = kind, ParentId = parentId,
+            SortOrder = s.Categories.Where(c => c.ParentId == parentId).Select(c => c.SortOrder).DefaultIfEmpty(-1).Max() + 1
+        };
+        await Db.InsertAsync(category);
+        return category;
+    }
+
+    public async Task RenameCategoryAsync(int categoryId, string name)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(name)) throw new FinanceException("Err_Name");
+        var category = await Db.FindAsync<Category>(categoryId) ?? throw new FinanceException("Err_NotFound");
+        category.Name = name.Trim();
+        category.NameBn = null; // the typed name is used in both languages from now on
+        await Db.UpdateAsync(category);
+    }
+
+    /// <summary>
+    /// Deletes a category (ADR 0016).
+    /// Sub-category: its entries move to the parent, then it is removed.
+    /// Main category: only when neither it nor its sub-categories have entries; its sub-categories and
+    /// its budget lines in every month are removed with it. The last main category of a kind stays.
+    /// </summary>
+    public async Task DeleteCategoryAsync(int categoryId)
+    {
+        var s = await LoadAsync();
+        var category = s.Categories.FirstOrDefault(c => c.Id == categoryId) ?? throw new FinanceException("Err_NotFound");
+
+        if (category.ParentId is { } parentId)
+        {
+            var moved = s.Transactions.Where(t => t.CategoryId == categoryId).ToList();
+            await Db.RunInTransactionAsync(c =>
+            {
+                foreach (var t in moved)
+                {
+                    t.CategoryId = parentId;
+                    c.Update(t);
+                }
+                c.Delete(category);
+            });
+            return;
+        }
+
+        var children = s.Categories.Where(c => c.ParentId == categoryId).ToList();
+        var ids = children.Select(c => c.Id).Append(categoryId).ToHashSet();
+        if (s.Transactions.Any(t => t.CategoryId is { } id && ids.Contains(id))) throw new FinanceException("Err_CategoryInUse");
+        if (s.TopCategories(category.Kind).Count() <= 1) throw new FinanceException("Err_LastCategory");
+
+        var budgetLines = s.Budget.Where(b => b.CategoryId == categoryId).ToList();
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var b in budgetLines) c.Delete(b);
+            foreach (var child in children) c.Delete(child);
+            c.Delete(category);
+        });
+    }
+
+    // ---------- Budget (ADR 0011) ----------
+
+    /// <summary>
+    /// Makes sure <paramref name="month"/> has a budget: if it has none, copies the **repeating** lines
+    /// (not "only this month") of the latest earlier month that has a budget (ADR 0011, 0019).
+    /// Returns true when it copied something.
+    /// </summary>
+    public async Task<bool> EnsureBudgetAsync(string month)
+    {
+        await database.InitAsync();
+        if (await Db.Table<BudgetItem>().Where(b => b.Month == month).CountAsync() > 0) return false;
+
+        var source = (await Db.Table<BudgetItem>().ToListAsync())
+            .Where(b => string.CompareOrdinal(b.Month, month) < 0)
+            .GroupBy(b => b.Month)
+            .OrderByDescending(g => g.Key)
+            .FirstOrDefault();
+        var copies = source?.Where(b => !b.OnlyThisMonth)
+            .Select(b => new BudgetItem { Month = month, CategoryId = b.CategoryId, Estimate = b.Estimate })
+            .ToList() ?? [];
+        if (copies.Count == 0) return false;
+
+        await Db.InsertAllAsync(copies);
+        return true;
+    }
+
+    private const string DefaultBudgetKey = "default-budget-v1";
+
+    /// <summary>
+    /// One time per database (ADR 0020): adds the fixed default budget (<see cref="FinanceDatabase.DefaultBudget"/>)
+    /// to <paramref name="month"/> and to later months that already have a budget, as Monthly lines.
+    /// Missing categories (e.g. DPS, Education) are created. Lines the user already has are left as they
+    /// are. Returns true when it ran.
+    /// </summary>
+    public async Task<bool> ApplyDefaultBudgetAsync(string month)
+    {
+        await database.InitAsync();
+        if (await Db.FindAsync<AppMeta>(DefaultBudgetKey) is not null) return false;
+        await EnsureBudgetAsync(month);
+
+        var categories = await Db.Table<Category>().ToListAsync();
+        var budget = await Db.Table<BudgetItem>().ToListAsync();
+        var months = budget.Select(b => b.Month).Where(m => string.CompareOrdinal(m, month) > 0)
+            .Append(month).Distinct().ToList();
+        var nextOrder = categories.Where(c => c.ParentId is null).Select(c => c.SortOrder).DefaultIfEmpty(0).Max() + 1;
+
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var (name, bn, estimate) in FinanceDatabase.DefaultBudget)
+            {
+                var category = categories.FirstOrDefault(x => x.ParentId is null && x.Kind == CategoryKind.Expense
+                                                              && string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+                if (category is null)
+                {
+                    category = new Category { Name = name, NameBn = bn, Kind = CategoryKind.Expense, SortOrder = nextOrder++ };
+                    c.Insert(category);
+                }
+
+                foreach (var m in months)
+                {
+                    if (!budget.Any(b => b.Month == m && b.CategoryId == category.Id))
+                        c.Insert(new BudgetItem { Month = m, CategoryId = category.Id, Estimate = Money.FromTaka(estimate) });
+                }
+            }
+            c.Insert(new AppMeta { Key = DefaultBudgetKey, Value = month });
+        });
+        return true;
+    }
+
+    /// <summary>
+    /// Sets (or adds) the estimate of one category for one month (ADR 0019).
+    /// <paramref name="onlyThisMonth"/>: null keeps the line's current setting (new lines repeat).
+    /// A repeating line is also written into every later month that already has a budget, so a change
+    /// "from now on" doesn't have to be repeated month by month; a one-off line is removed from them.
+    /// </summary>
+    public async Task SetBudgetAsync(string month, int categoryId, long estimate, bool? onlyThisMonth = null)
+    {
+        await database.InitAsync();
+        if (estimate < 0) throw new FinanceException("Err_Amount");
+        var category = await Db.FindAsync<Category>(categoryId) ?? throw new FinanceException("Err_NotFound");
+        if (category.ParentId is not null || category.Kind != CategoryKind.Expense) throw new FinanceException("Err_BudgetCategory");
+
+        var all = await Db.Table<BudgetItem>().ToListAsync();
+        var existing = all.FirstOrDefault(b => b.Month == month && b.CategoryId == categoryId);
+        var oneOff = onlyThisMonth ?? existing?.OnlyThisMonth ?? false;
+        var laterMonths = all.Where(b => string.CompareOrdinal(b.Month, month) > 0).Select(b => b.Month).Distinct().ToList();
+
+        await Db.RunInTransactionAsync(c =>
+        {
+            if (existing is null)
+                c.Insert(new BudgetItem { Month = month, CategoryId = categoryId, Estimate = estimate, OnlyThisMonth = oneOff });
+            else
+            {
+                existing.Estimate = estimate;
+                existing.OnlyThisMonth = oneOff;
+                c.Update(existing);
+            }
+
+            foreach (var later in laterMonths)
+            {
+                var line = all.FirstOrDefault(b => b.Month == later && b.CategoryId == categoryId);
+                if (oneOff)
+                {
+                    if (line is not null) c.Delete(line);
+                }
+                else if (line is null)
+                    c.Insert(new BudgetItem { Month = later, CategoryId = categoryId, Estimate = estimate });
+                else
+                {
+                    line.Estimate = estimate;
+                    line.OnlyThisMonth = false;
+                    c.Update(line);
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Removes a category from the budget of <paramref name="month"/> and of every later month that
+    /// already has a budget, so it doesn't come back next month (ADR 0019).
+    /// </summary>
+    public async Task RemoveBudgetAsync(string month, int categoryId)
+    {
+        await database.InitAsync();
+        var lines = (await Db.Table<BudgetItem>().Where(b => b.CategoryId == categoryId).ToListAsync())
+            .Where(b => string.CompareOrdinal(b.Month, month) >= 0)
+            .ToList();
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var line in lines) c.Delete(line);
+        });
+    }
+
+    // ---------- Recurring bills ----------
+
+    public async Task AddBillAsync(RecurringBill bill, DateTime today)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(bill.Name)) throw new FinanceException("Err_Name");
+        if (bill.Amount <= 0) throw new FinanceException("Err_Amount");
+        if (bill.DayOfMonth is < 1 or > 31) throw new FinanceException("Err_Day");
+        if (string.IsNullOrEmpty(bill.StartMonth)) bill.StartMonth = MonthKey.Of(today);
+        await Db.InsertAsync(bill);
+        await GenerateDuesAsync(today);
+    }
+
+    /// <summary>Stops a bill from <paramref name="fromMonth"/> on; unpaid dues from that month are removed.</summary>
+    public async Task StopBillAsync(int billId, string fromMonth)
+    {
+        var s = await LoadAsync();
+        var bill = s.Bills.FirstOrDefault(b => b.Id == billId) ?? throw new FinanceException("Err_NotFound");
+        var toRemove = s.Dues.Where(d => d.SourceType == DueSource.Bill && d.SourceId == billId
+                                         && string.CompareOrdinal(d.DueMonth, fromMonth) >= 0 && d.PaidAmount == 0).ToList();
+        bill.IsActive = false;
+        bill.EndMonth = MonthKey.Add(fromMonth, -1);
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var d in toRemove) c.Delete(d);
+            c.Update(bill);
+        });
+    }
+
+    // ---------- Personal borrowing / lending ----------
+
+    /// <summary>Borrowed: money comes into AccountId (if set) and a Due is created. Lent: money leaves AccountId.</summary>
+    public async Task AddPersonalDebtAsync(PersonalDebt debt)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(debt.PersonName)) throw new FinanceException("Err_Name");
+        if (debt.Amount <= 0) throw new FinanceException("Err_Amount");
+        if (debt.Direction == DebtDirection.Lent && debt.AccountId is null) throw new FinanceException("Err_Account");
+        debt.PersonName = debt.PersonName.Trim();
+
+        await Db.RunInTransactionAsync(c =>
+        {
+            c.Insert(debt);
+            if (debt.AccountId is not null)
+            {
+                c.Insert(new Transaction
+                {
+                    Date = debt.Date,
+                    Amount = debt.Amount,
+                    Type = debt.Direction == DebtDirection.Borrowed ? TransactionType.BorrowIn : TransactionType.LendOut,
+                    AccountId = debt.AccountId,
+                    DebtId = debt.Id,
+                    Note = debt.Note ?? debt.PersonName
+                });
+            }
+            if (debt.Direction == DebtDirection.Borrowed)
+                c.Insert(LiabilityEngine.BuildPersonalDue(debt));
+        });
+    }
+
+    /// <summary>Someone returns (part of) the money you lent them.</summary>
+    public async Task ReceiveLendReturnAsync(int debtId, long amount, int accountId, DateTime date)
+    {
+        var s = await LoadAsync();
+        var debt = s.Debts.FirstOrDefault(d => d.Id == debtId && d.Direction == DebtDirection.Lent)
+                   ?? throw new FinanceException("Err_NotFound");
+        if (amount <= 0) throw new FinanceException("Err_Amount");
+        if (amount > s.LendRemaining(debt)) throw new FinanceException("Err_TooMuch");
+
+        await Db.InsertAsync(new Transaction
+        {
+            Date = date, Amount = amount, Type = TransactionType.LendReturn,
+            AccountId = accountId, DebtId = debtId, Note = debt.PersonName
+        });
+    }
+
+    // ---------- Paying dues ----------
+
+    public async Task PayDueAsync(int dueId, long amount, int accountId, DateTime date)
+    {
+        await database.InitAsync();
+        var due = await Db.FindAsync<Due>(dueId) ?? throw new FinanceException("Err_NotFound");
+        if (amount <= 0) throw new FinanceException("Err_Amount");
+        if (amount > due.Remaining) throw new FinanceException("Err_TooMuch");
+
+        var payment = LiabilityEngine.ApplyPayment(due, amount, accountId, date);
+        await Db.RunInTransactionAsync(c =>
+        {
+            c.Update(due);
+            c.Insert(payment);
+        });
+    }
+
+    // ---------- Backup ----------
+
+    public async Task<BackupData> ExportAsync(DateTime now)
+    {
+        var s = await LoadAsync();
+        return new BackupData
+        {
+            CreatedAt = now,
+            Accounts = s.Accounts, Categories = s.Categories, Transactions = s.Transactions,
+            Loans = s.Loans, Cards = s.Cards, Bills = s.Bills, Debts = s.Debts, Dues = s.Dues,
+            Budget = s.Budget
+        };
+    }
+
+    /// <summary>Replaces ALL data with the backup, keeping the original Ids so links stay intact.</summary>
+    public async Task ImportAsync(BackupData data)
+    {
+        await database.InitAsync();
+        await Db.RunInTransactionAsync(c =>
+        {
+            c.DeleteAll<BudgetItem>();
+            c.DeleteAll<Due>();
+            c.DeleteAll<Transaction>();
+            c.DeleteAll<PersonalDebt>();
+            c.DeleteAll<RecurringBill>();
+            c.DeleteAll<CreditCard>();
+            c.DeleteAll<Loan>();
+            c.DeleteAll<Category>();
+            c.DeleteAll<Account>();
+
+            // InsertOrReplace writes the primary key too; plain Insert would renumber AutoIncrement ids.
+            foreach (var x in data.Accounts) c.InsertOrReplace(x);
+            foreach (var x in data.Categories) c.InsertOrReplace(x);
+            foreach (var x in data.Loans) c.InsertOrReplace(x);
+            foreach (var x in data.Cards) c.InsertOrReplace(x);
+            foreach (var x in data.Bills) c.InsertOrReplace(x);
+            foreach (var x in data.Debts) c.InsertOrReplace(x);
+            foreach (var x in data.Dues) c.InsertOrReplace(x);
+            foreach (var x in data.Transactions) c.InsertOrReplace(x);
+            foreach (var x in data.Budget) c.InsertOrReplace(x);
+        });
+    }
+}

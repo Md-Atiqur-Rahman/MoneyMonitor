@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<!-- Fully offline: no INTERNET permission (docs/adr/0003-offline-sqlite-storage.md).
+	     allowBackup lets Android also include the database in its own Google backup. -->
+	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true" android:label="Daily Account"></application>
+</manifest>

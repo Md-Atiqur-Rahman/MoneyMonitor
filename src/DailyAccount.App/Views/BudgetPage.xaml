@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.BudgetPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:BudgetViewModel">
+
+    <ContentPage.Resources>
+        <!-- Estimate / Spent / Left table row, same columns as the sheet. -->
+        <DataTemplate x:Key="BudgetRowTemplate" x:DataType="vm:BudgetRow">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Padding="0,10" RowSpacing="2">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding Tap}" />
+                </Grid.GestureRecognizers>
+                <Label Text="{Binding Name}" FontAttributes="Bold" />
+                <Label Grid.Column="1" Text="{Binding Left}" TextColor="{Binding LeftColor}" FontAttributes="Bold" HorizontalOptions="End" />
+                <Label Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Muted}">
+                    <Label.FormattedText>
+                        <FormattedString>
+                            <Span Text="{loc:Tr Budget_Estimate}" />
+                            <Span Text=" " />
+                            <Span Text="{Binding Estimate}" />
+                            <Span Text="  ·  " />
+                            <Span Text="{loc:Tr Budget_Spent}" />
+                            <Span Text=" " />
+                            <Span Text="{Binding Spent}" />
+                        </FormattedString>
+                    </Label.FormattedText>
+                </Label>
+                <Label Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Subtitle}" IsVisible="{Binding HasSubtitle}" Style="{StaticResource Muted}" TextColor="{StaticResource Info}" />
+            </Grid>
+        </DataTemplate>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <!-- Month switcher -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                    <Label Text="{loc:Tr Budget_Title}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding Model.MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
+
+            <!-- Summary: Income − Planned = Save -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+                        <Label Text="{Binding Model.IncomeLabel}" />
+                        <Label Grid.Column="1" Text="{Binding Model.Income}" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
+                        <Label Grid.Row="1" Text="{loc:Tr Fc_Payments}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Model.Payments}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="2" Text="{loc:Tr Budget_ItemsTotal}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding Model.BudgetItems}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="3" Text="{loc:Tr Budget_Planned}" />
+                        <Label Grid.Row="3" Grid.Column="1" Text="{Binding Model.Planned}" FontAttributes="Bold" />
+                        <BoxView Grid.Row="4" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
+                        <Label Grid.Row="5" Text="{loc:Tr Budget_Save}" FontAttributes="Bold" FontSize="17" />
+                        <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.Save}" FontAttributes="Bold" FontSize="17" TextColor="{StaticResource Primary}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding Model.SaveIsNegative}" Value="True">
+                                    <Setter Property="TextColor" Value="{StaticResource Warn}" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                        <Label Grid.Row="6" Text="{loc:Tr Dash_Spent}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="6" Grid.Column="1" Text="{Binding Model.Spent}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="7" Text="{loc:Tr Budget_TotalLeft}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="7" Grid.Column="1" Text="{Binding Model.Left}" Style="{StaticResource Muted}" />
+                    </Grid>
+                    <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource WarnTint}" IsVisible="{Binding Model.SaveIsNegative}">
+                        <Label Text="{Binding Model.Banner}" TextColor="{StaticResource WarnDark}" FontAttributes="Bold" />
+                    </Border>
+                    <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource PrimaryTint}" IsVisible="{Binding Model.SaveIsOk}">
+                        <Label Text="{Binding Model.Banner}" TextColor="{StaticResource PrimaryDark}" FontAttributes="Bold" />
+                    </Border>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Payments due (card bill, loans) -->
+            <Label Text="{loc:Tr Budget_Dues}" Style="{StaticResource Caption}" IsVisible="{Binding Model.HasDues}" />
+            <Border Style="{StaticResource Card}" Padding="16,4" IsVisible="{Binding Model.HasDues}">
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.DueRows}" BindableLayout.ItemTemplate="{StaticResource BudgetRowTemplate}" />
+            </Border>
+
+            <!-- Spending plan -->
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="{loc:Tr Budget_Items}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                <Button Grid.Column="1" Text="{loc:Tr Budget_AddItem}" Command="{Binding AddItemCommand}" Style="{StaticResource SmallOutline}" />
+            </Grid>
+            <Border Style="{StaticResource Card}" Padding="16,4">
+                <VerticalStackLayout>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.ItemRows}" BindableLayout.ItemTemplate="{StaticResource BudgetRowTemplate}" />
+                    <Label Text="{loc:Tr Budget_Empty}" Style="{StaticResource Muted}" IsVisible="{Binding Model.IsEmpty}" Padding="0,10" />
+                </VerticalStackLayout>
+            </Border>
+            <Label Text="{loc:Tr Budget_TapToEdit}" Style="{StaticResource Muted}" HorizontalOptions="Center" />
+
+            <!-- Next month (only when looking at the current month) -->
+            <Border Style="{StaticResource Card}" IsVisible="{Binding Model.HasForecast}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{Binding Model.Forecast.Title}" Style="{StaticResource H2}" />
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="12">
+                        <Label Text="{loc:Tr Fc_Payments}" Style="{StaticResource Muted}" />
+                        <Label Grid.Column="1" Text="{Binding Model.Forecast.Payments}" />
+                        <Label Grid.Row="1" Text="{Binding Model.Forecast.BudgetLabel}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Model.Forecast.Budget}" />
+                        <Label Grid.Row="2" Text="{loc:Tr Fc_Needed}" FontAttributes="Bold" />
+                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding Model.Forecast.Needed}" FontAttributes="Bold" />
+                        <Label Grid.Row="3" Text="{Binding Model.Forecast.IncomeLabel}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="3" Grid.Column="1" Text="{Binding Model.Forecast.Income}" />
+                        <BoxView Grid.Row="4" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
+                        <Label Grid.Row="5" Text="{loc:Tr Budget_Save}" FontAttributes="Bold" />
+                        <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.Forecast.Save}" FontAttributes="Bold" />
+                    </Grid>
+                    <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource PrimaryTint}" IsVisible="{Binding Model.Forecast.IsOk}">
+                        <Label Text="{Binding Model.Forecast.Result}" TextColor="{StaticResource PrimaryDark}" FontAttributes="Bold" />
+                    </Border>
+                    <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource WarnTint}" IsVisible="{Binding Model.Forecast.IsShort}">
+                        <Label Text="{Binding Model.Forecast.Result}" TextColor="{StaticResource WarnDark}" FontAttributes="Bold" />
+                    </Border>
+                    <Label Text="{loc:Tr Fc_IncomeHint}" Style="{StaticResource Muted}" IsVisible="{Binding Model.Forecast.IncomeFromThisMonth}" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

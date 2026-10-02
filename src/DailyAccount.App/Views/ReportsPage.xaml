@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.ReportsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:ReportsViewModel"
+    Shell.NavBarIsVisible="True"
+    Title="{loc:Tr Tab_Reports}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+
+            <!-- Month switcher -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                    <Label Text="{loc:Tr Reports_Title}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding Model.MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
+
+            <!-- Cash flow -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr CashFlow}" Style="{StaticResource H2}" />
+                    <Label Text="{loc:Tr CashFlowSub}" Style="{StaticResource Muted}" />
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+                        <Label Text="{loc:Tr Income}" />
+                        <Label Grid.Column="1" Text="{Binding Model.Income}" TextColor="{StaticResource Primary}" FontAttributes="Bold" />
+                        <Label Grid.Row="1" Text="{loc:Tr DuesPaid}" />
+                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Model.DuesPaid}" />
+                        <Label Grid.Row="2" Text="{loc:Tr CashExpenses}" />
+                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding Model.CashExpenses}" />
+                        <BoxView Grid.Row="3" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
+                        <Label Grid.Row="4" Text="{loc:Tr Dash_SavedSoFar}" FontAttributes="Bold" />
+                        <Label Grid.Row="4" Grid.Column="1" Text="{Binding Model.SavedSoFar}" FontAttributes="Bold" />
+                        <Label Grid.Row="5" Text="{loc:Tr DuesStill}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.DuesStill}" TextColor="{StaticResource Warn}" />
+                        <Label Grid.Row="6" Text="{loc:Tr ProjectedSavings}" FontAttributes="Bold" />
+                        <Label Grid.Row="6" Grid.Column="1" Text="{Binding Model.ProjectedSavings}" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Spending by category -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="{loc:Tr SpendingByCategory}" Style="{StaticResource H2}" />
+                        <Label Grid.Column="1" Text="{Binding Model.SpendingTotal}" FontAttributes="Bold" />
+                    </Grid>
+                    <Label Text="{Binding Model.SpendingSub}" Style="{StaticResource Muted}" />
+                    <Label Text="{loc:Tr Reports_TapHint}" Style="{StaticResource Muted}" TextColor="{StaticResource Info}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.Categories}" BindableLayout.ItemTemplate="{StaticResource BarRowTemplate}" />
+                    <Label Text="{loc:Tr NoSpending}" Style="{StaticResource Muted}" IsVisible="{Binding Model.NoSpending}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Top items -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{loc:Tr Reports_TopItems}" Style="{StaticResource H2}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.TopItems}" BindableLayout.ItemTemplate="{StaticResource BarRowTemplate}" />
+                    <Label Text="{loc:Tr NoItems}" Style="{StaticResource Muted}" IsVisible="{Binding Model.NoItems}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Trend -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{loc:Tr Last6Months}" Style="{StaticResource H2}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.Trend}" BindableLayout.ItemTemplate="{StaticResource BarRowTemplate}" />
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>
