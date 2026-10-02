@@ -26,7 +26,8 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0019](0019-repeating-budget-items.md) | Budget items repeat every month (or only this month); budget total shown | Accepted (wording amended by 0020) |
 | [0020](0020-default-budget-and-wording.md) | Fixed default budget, and clearer budget wording | Accepted |
 | [0021](0021-delete-billed-card-purchase.md) | Deleting a card purchase that is already on a statement | Accepted |
-| [0022](0022-last-month-card-purchases-tab.md) | "Last month" tab for earlier card purchases | Accepted |
+| [0022](0022-last-month-card-purchases-tab.md) | "Last month" tab for earlier card purchases | Accepted (layout changed by 0023) |
+| [0023](0023-liabilities-layout.md) | Liabilities layout: card on top, total owed at the bottom | Accepted |
 
 ## Template
 

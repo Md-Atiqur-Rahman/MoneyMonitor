@@ -15,17 +15,14 @@ public sealed record LoanRow(string Title, string Subtitle, string ProgressText,
     public bool CanDelete => Delete is not null;
 }
 
-public sealed record EmiRow(string Name, string Detail, string Amount);
-
 public sealed record CardRow(
     string Name, string Subtitle, string LimitText, string Available, double UsedProgress,
     string ThisMonth, string ThisMonthSub, ICommand? Pay, string BillPurchases, ICommand ShowBillPurchases, ICommand ShowLoans,
     string NextMonth, string NextMonthSub,
-    List<EmiRow> Emis, List<TxRow> Purchases, ICommand Edit)
+    List<TxRow> Purchases, ICommand Edit)
 {
     public bool CanPay => Pay is not null;
     public bool ThisMonthPaid => Pay is null;
-    public bool HasEmis => Emis.Count > 0;
     public bool HasBillPurchases => BillPurchases.Length > 0;
     public bool HasPurchases => Purchases.Count > 0;
 }
@@ -46,6 +43,7 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance) : ViewM
     [ObservableProperty] private string _totalOwe = "";
     [ObservableProperty] private string _loansOwe = "";
     [ObservableProperty] private string _cardsOwe = "";
+    [ObservableProperty] private string _lastMonthOwe = "";
     [ObservableProperty] private string _personalOwe = "";
     [ObservableProperty] private List<LoanRow> _loans = [];
     [ObservableProperty] private List<CardRow> _cards = [];
@@ -78,7 +76,11 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance) : ViewM
         var cardLoanIds = s.Loans.Where(l => l.CardId is not null).Select(l => l.Id).ToHashSet();
         TotalOwe = Fmt.Money(s.OutstandingLiabilities(today));
         LoansOwe = Fmt.Money(s.Dues.Where(d => d.SourceType == DueSource.Loan && !cardLoanIds.Contains(d.SourceId)).Sum(d => d.Remaining));
-        CardsOwe = Fmt.Money(s.Cards.Sum(c => s.CardLimitUsed(c, today)));
+        // Breakdown that adds up to the total (ADR 0023): Last month = unpaid card statements (last
+        // month's purchases); Cards = remaining card EMIs + this cycle's purchases.
+        var statementsOwed = s.Dues.Where(d => d.SourceType == DueSource.Card).Sum(d => d.Remaining);
+        LastMonthOwe = Fmt.Money(statementsOwed);
+        CardsOwe = Fmt.Money(s.Cards.Sum(c => s.CardLimitUsed(c, today)) - statementsOwed);
         PersonalOwe = Fmt.Money(s.Dues.Where(d => d.SourceType == DueSource.Personal).Sum(d => d.Remaining));
 
         Loans = s.Loans.Select(l => BuildLoan(l, s)).ToList();
@@ -160,15 +162,6 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance) : ViewM
             : Loc.F(billPurchases.Count == 1 ? "Card_BillPurchasesSummary1" : "Card_BillPurchasesSummary",
                 Fmt.Number(billPurchases.Count), Fmt.Money(billPurchases.Sum(t => t.Amount)));
 
-        var emis = s.CardLoans(card.Id).Select(l =>
-        {
-            var dues = s.Dues.Where(d => d.SourceType == DueSource.Loan && d.SourceId == l.Id).OrderBy(d => d.Sequence).ToList();
-            var nextDue = dues.FirstOrDefault(d => d.Status != DueStatus.Paid);
-            return new EmiRow(l.Lender,
-                Loc.F("Loan_Progress", Fmt.Number(dues.Count(d => d.Status == DueStatus.Paid)), Fmt.Number(l.InstallmentCount)),
-                nextDue is null ? Loc.T("Loan_Done") : Fmt.Money(nextDue.Remaining));
-        }).ToList();
-
         var purchases = s.Transactions
             .Where(t => t.Type == TransactionType.CardPurchase && t.CardId == card.Id && t.Date.Date >= cycleStart)
             .OrderByDescending(t => t.Date).ThenByDescending(t => t.Id)
@@ -191,7 +184,6 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance) : ViewM
             Fmt.Money(nextEmi + unbilled),
             Loc.F("Due_CardBreakdown", Fmt.Money(nextEmi), Fmt.Money(unbilled)) + " · " +
                 Loc.F("Card_NextStatement", Fmt.Date(LiabilityEngine.StatementDate(card, cycleStart))),
-            emis,
             purchases,
             new AsyncRelayCommand(() => Ui.Go($"{AppShell.AddCard}?id={card.Id}")));
     }
