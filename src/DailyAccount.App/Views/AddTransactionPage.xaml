@@ -73,16 +73,24 @@
             <!-- Item lines -->
             <Border Style="{StaticResource Card}" IsVisible="{Binding ShowItems}" Padding="12">
                 <VerticalStackLayout Spacing="10">
+                    <Label Text="{loc:Tr Item_OptionalHint}" FontSize="13" TextColor="{StaticResource Muted}" />
                     <VerticalStackLayout Spacing="10" BindableLayout.ItemsSource="{Binding Lines}">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="vm:ItemLine">
                                 <Border Stroke="{StaticResource Line}" StrokeShape="RoundRectangle 12" Padding="10,6" BackgroundColor="{StaticResource Ground}">
-                                    <Grid ColumnDefinitions="*,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8">
-                                        <Picker Grid.ColumnSpan="2" ItemsSource="{Binding SubCategories}" SelectedItem="{Binding SelectedSub}" Title="{loc:Tr SubCategory}" FontSize="14" />
+                                    <!-- ADR 0027: type + "+ Sub"; item; qty, unit, rate → price (qty and rate optional) -->
+                                    <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="6">
+                                        <Picker ItemsSource="{Binding SubCategories}" SelectedItem="{Binding SelectedSub}" Title="{loc:Tr SubCategory}" FontSize="14" />
+                                        <Button Grid.Column="1" Text="{loc:Tr AddSub}" Command="{Binding NewSubCommand}" Style="{StaticResource SmallOutline}" VerticalOptions="Center" />
                                         <ImageButton Grid.Column="2" Source="close.png" Command="{Binding RemoveCommand}" WidthRequest="36" HeightRequest="36" Padding="9" BackgroundColor="Transparent" SemanticProperties.Description="{loc:Tr Delete}" />
-                                        <Entry Grid.Row="1" Text="{Binding Name}" Placeholder="{loc:Tr ItemName}" FontSize="15" />
-                                        <Entry Grid.Row="1" Grid.Column="1" Text="{Binding Quantity}" Placeholder="{loc:Tr Qty}" FontSize="15" />
-                                        <Entry Grid.Row="1" Grid.Column="2" Text="{Binding PriceText}" Placeholder="{loc:Tr Price}" Keyboard="Numeric" FontSize="15" WidthRequest="90" FontAttributes="Bold" />
+                                        <Entry Grid.Row="1" Grid.ColumnSpan="3" Text="{Binding Name}" Placeholder="{loc:Tr ItemName}" FontSize="15" />
+                                        <Grid Grid.Row="2" Grid.ColumnSpan="3" ColumnDefinitions="*,*,*,90" ColumnSpacing="6">
+                                            <Entry Text="{Binding QuantityText}" Placeholder="{loc:Tr Qty}" Keyboard="Numeric" FontSize="15" PlaceholderColor="{StaticResource Muted}" />
+                                            <Picker Grid.Column="1" ItemsSource="{Binding Units}" SelectedItem="{Binding SelectedUnit}" FontSize="15" />
+                                            <Entry Grid.Column="2" Text="{Binding RateText}" Placeholder="{Binding RatePlaceholder}" Keyboard="Numeric" FontSize="15" PlaceholderColor="{StaticResource Muted}" />
+                                            <Entry Grid.Column="3" Text="{Binding PriceText}" Placeholder="{loc:Tr Price}" Keyboard="Numeric" FontSize="15" FontAttributes="Bold" />
+                                        </Grid>
+                                        <Label Grid.Row="3" Grid.ColumnSpan="3" Text="{Binding Calculation}" IsVisible="{Binding HasCalculation}" FontSize="13" TextColor="{StaticResource Muted}" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -127,15 +135,13 @@
                 </Border>
             </VerticalStackLayout>
 
-            <!-- Return date (borrow) -->
+            <!-- Pay back in (borrow): a month, no day (ADR 0030) -->
             <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowReturnDate}">
-                <Grid ColumnDefinitions="*,Auto">
-                    <Label Text="{loc:Tr SetReturnDate}" VerticalOptions="Center" />
-                    <Switch Grid.Column="1" IsToggled="{Binding HasReturnDate}" />
-                </Grid>
-                <Border Style="{StaticResource Field}" IsVisible="{Binding HasReturnDate}">
-                    <DatePicker Date="{Binding ReturnDate}" Format="d MMM yyyy" />
+                <Label Text="{loc:Tr Debt_PayBackIn}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding PayMonths}" SelectedItem="{Binding SelectedPayMonth}" />
                 </Border>
+                <Label Text="{loc:Tr Debt_PayBackHint}" Style="{StaticResource Muted}" />
             </VerticalStackLayout>
 
             <!-- Note -->

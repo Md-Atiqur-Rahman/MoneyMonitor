@@ -34,12 +34,31 @@
                     <Label Text="{loc:Tr CashFlow}" Style="{StaticResource H2}" />
                     <Label Text="{loc:Tr CashFlowSub}" Style="{StaticResource Muted}" />
                     <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
-                        <Label Text="{loc:Tr Income}" />
-                        <Label Grid.Column="1" Text="{Binding Model.Income}" TextColor="{StaticResource Primary}" FontAttributes="Bold" />
-                        <Label Grid.Row="1" Text="{loc:Tr DuesPaid}" />
-                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Model.DuesPaid}" />
-                        <Label Grid.Row="2" Text="{loc:Tr CashExpenses}" />
-                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding Model.CashExpenses}" />
+                        <!-- Each line opens its details (ADR 0032) -->
+                        <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding OpenFlowCommand}" CommandParameter="in" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="{loc:Tr Flow_MoneyIn}" TextDecorations="Underline" />
+                            <Label Grid.Column="1" Text="{Binding Model.Income}" TextColor="{StaticResource Primary}" FontAttributes="Bold" />
+                            <Label Grid.Column="2" Text="›" TextColor="{StaticResource Muted}" />
+                        </Grid>
+                        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding OpenFlowCommand}" CommandParameter="dues" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="{loc:Tr DuesPaid}" TextDecorations="Underline" />
+                            <Label Grid.Column="1" Text="{Binding Model.DuesPaid}" />
+                            <Label Grid.Column="2" Text="›" TextColor="{StaticResource Muted}" />
+                        </Grid>
+                        <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding OpenFlowCommand}" CommandParameter="spent" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="{loc:Tr CashExpenses}" TextDecorations="Underline" />
+                            <Label Grid.Column="1" Text="{Binding Model.CashExpenses}" />
+                            <Label Grid.Column="2" Text="›" TextColor="{StaticResource Muted}" />
+                        </Grid>
                         <BoxView Grid.Row="3" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
                         <Label Grid.Row="4" Text="{loc:Tr Dash_SavedSoFar}" FontAttributes="Bold" />
                         <Label Grid.Row="4" Grid.Column="1" Text="{Binding Model.SavedSoFar}" FontAttributes="Bold" />

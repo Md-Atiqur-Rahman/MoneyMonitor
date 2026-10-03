@@ -36,6 +36,15 @@ public static class Ui
         return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
 
+    /// <summary>Asks for a whole number (e.g. installments). Returns null when cancelled or invalid.</summary>
+    public static async Task<int?> PromptInt(string title, int? current = null)
+    {
+        if (CurrentPage is not { } page) return null;
+        var text = await page.DisplayPromptAsync(Loc.T("AppName"), title, Loc.T("Save"), Loc.T("Cancel"),
+            "0", maxLength: 4, keyboard: Keyboard.Numeric, initialValue: current?.ToString() ?? "");
+        return text is null ? null : Fmt.ParseInt(text);
+    }
+
     /// <summary>Shows a list of choices. Returns the chosen text or null.</summary>
     public static async Task<string?> Choose(string title, params string[] options)
     {

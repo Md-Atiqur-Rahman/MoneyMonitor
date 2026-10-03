@@ -15,12 +15,25 @@
                 <Grid.GestureRecognizers>
                     <TapGestureRecognizer Command="{Binding Tap}" />
                 </Grid.GestureRecognizers>
-                <Label Text="{Binding Name}" FontAttributes="Bold" />
+                <Label Text="{Binding Name}" FontAttributes="Bold">
+                    <Label.Triggers>
+                        <!-- "Won't pay this month" (ADR 0031) -->
+                        <DataTrigger TargetType="Label" Binding="{Binding Struck}" Value="True">
+                            <Setter Property="TextDecorations" Value="Strikethrough" />
+                            <Setter Property="Opacity" Value="0.55" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
                 <HorizontalStackLayout Grid.Column="1" Grid.RowSpan="2" Spacing="8" HorizontalOptions="End" VerticalOptions="Start">
                     <Label Text="{Binding Left}" TextColor="{Binding LeftColor}" FontAttributes="Bold" VerticalOptions="Center" />
                     <Button Text="{loc:Tr Budget_DueButton}" Command="{Binding Due}" IsVisible="{Binding HasDue}" Style="{StaticResource SmallOutline}" HeightRequest="34" MinimumHeightRequest="34" Padding="12,0" />
                 </HorizontalStackLayout>
                 <Label Grid.Row="1" Style="{StaticResource Muted}">
+                    <Label.Triggers>
+                        <DataTrigger TargetType="Label" Binding="{Binding Struck}" Value="True">
+                            <Setter Property="TextDecorations" Value="Strikethrough" />
+                        </DataTrigger>
+                    </Label.Triggers>
                     <Label.FormattedText>
                         <FormattedString>
                             <Span Text="{loc:Tr Budget_Estimate}" />
@@ -57,7 +70,11 @@
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="10">
                     <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
-                        <Label Text="{Binding Model.IncomeLabel}" />
+                        <VerticalStackLayout>
+                            <Label Text="{Binding Model.IncomeLabel}" />
+                            <!-- income + borrowed (ADR 0033) -->
+                            <Label Text="{Binding Model.IncomeParts}" Style="{StaticResource Muted}" IsVisible="{Binding Model.HasIncomeParts}" />
+                        </VerticalStackLayout>
                         <Label Grid.Column="1" Text="{Binding Model.Income}" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
                         <Label Grid.Row="1" Text="{loc:Tr Fc_Payments}" Style="{StaticResource Muted}" />
                         <Label Grid.Row="1" Grid.Column="1" Text="{Binding Model.Payments}" Style="{StaticResource Muted}" />

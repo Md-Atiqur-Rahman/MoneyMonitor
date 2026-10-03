@@ -5,33 +5,130 @@ using DailyAccount.App.Localization;
 using DailyAccount.App.Services;
 using DailyAccount.Core.Data;
 using DailyAccount.Core.Models;
+using DailyAccount.Core.Services;
 
 namespace DailyAccount.App.ViewModels;
 
-/// <summary>One line of a shopping trip: type (sub-category), item, qty, price (ADR 0013).</summary>
+/// <summary>
+/// One line of a shopping trip: type (sub-category), item, qty + unit, rate, price (ADR 0013, 0027).
+/// Qty and rate are optional; when both are given the price is qty × rate ("5 kg × ৳90 = ৳450").
+/// </summary>
 public sealed partial class ItemLine : ObservableObject
 {
     private readonly Action _changed;
     private readonly Action<ItemLine> _remove;
+    private readonly Func<ItemLine, Task> _newSub;
+    private bool _calculating;
 
-    public ItemLine(List<Option> subCategories, Action changed, Action<ItemLine> remove)
+    /// <summary>"—" (no unit) then kg, gm, ltr, ml, pcs, dozen, packet; Id = index in <see cref="ItemMath.Units"/>.</summary>
+    public static List<Option> UnitOptions() =>
+        [new(-1, "—"), .. ItemMath.Units.Select((u, i) => new Option(i, Loc.T("Unit_" + u)))];
+
+    public ItemLine(List<Option> subCategories, Action changed, Action<ItemLine> remove, Func<ItemLine, Task> newSub)
     {
         _subCategories = subCategories;
         _selectedSub = subCategories.FirstOrDefault();
         _changed = changed;
         _remove = remove;
+        _newSub = newSub;
+        Units = UnitOptions();
+        _selectedUnit = Units[1]; // kg: the usual unit at the bazar
     }
+
+    public List<Option> Units { get; }
 
     [ObservableProperty] private List<Option> _subCategories;
     [ObservableProperty] private Option? _selectedSub;
     [ObservableProperty] private string _name = "";
-    [ObservableProperty] private string _quantity = "";
+    [ObservableProperty] private string _quantityText = "";
+    [ObservableProperty] private Option? _selectedUnit;
+    [ObservableProperty] private string _rateText = "";
     [ObservableProperty] private string _priceText = "";
+    [ObservableProperty] private string _calculation = "";
 
-    partial void OnPriceTextChanged(string value) => _changed();
+    /// <summary>Unit code ("kg") or null for "—".</summary>
+    public string? UnitCode => SelectedUnit is { Id: >= 0 } u ? ItemMath.Units[u.Id] : null;
+
+    /// <summary>"Rate/kg" — for gm and ml the rate is per kg / litre.</summary>
+    public string RatePlaceholder => UnitCode is { } code
+        ? Loc.F("Item_RatePer", Loc.T("Unit_" + ItemMath.RateUnit(code)))
+        : Loc.T("Item_Rate");
+
+    public bool HasCalculation => Calculation.Length > 0;
+
+    partial void OnCalculationChanged(string value) => OnPropertyChanged(nameof(HasCalculation));
+    partial void OnQuantityTextChanged(string value) => Recalculate();
+    partial void OnRateTextChanged(string value) => Recalculate();
+
+    partial void OnSelectedUnitChanged(Option? value)
+    {
+        OnPropertyChanged(nameof(RatePlaceholder));
+        Recalculate();
+    }
+
+    partial void OnPriceTextChanged(string value)
+    {
+        if (!_calculating) ShowCalculation();
+        _changed();
+    }
+
+    /// <summary>The typed quantity as a number, or null when blank / not a number.</summary>
+    public decimal? Qty => Fmt.ParseNumber(QuantityText) is { } q && q > 0 ? q : null;
+
+    /// <summary>What is stored: "5 kg", "3", older free text as typed, or null.</summary>
+    public string? StoredQuantity => Qty is { } q
+        ? ItemMath.Format(q, UnitCode)
+        : string.IsNullOrWhiteSpace(QuantityText) ? null : QuantityText.Trim();
+
+    /// <summary>Qty and rate both given → price = qty × rate. Otherwise the typed price stays.</summary>
+    private void Recalculate()
+    {
+        if (_calculating) return;
+        if (Qty is { } q && Fmt.ParseMoney(RateText) is { } rate and > 0)
+        {
+            _calculating = true;
+            PriceText = Fmt.EditableAmount(ItemMath.Price(q, UnitCode, rate));
+            _calculating = false;
+        }
+        ShowCalculation();
+    }
+
+    private void ShowCalculation()
+    {
+        var price = Fmt.ParseMoney(PriceText);
+        if (Qty is not { } q || price is null)
+        {
+            Calculation = "";
+            return;
+        }
+        var qty = Fmt.Digits(ItemMath.Format(q, null)!) + (UnitCode is { } u ? " " + Loc.T("Unit_" + u) : "");
+        Calculation = Fmt.ParseMoney(RateText) is { } rate and > 0
+            ? Loc.F("Item_Calc", qty, Fmt.Money(rate) + (UnitCode is { } c ? "/" + Loc.T("Unit_" + ItemMath.RateUnit(c)) : ""), Fmt.Money(price.Value))
+            : Loc.F("Item_QtyPrice", qty, Fmt.Money(price.Value));
+    }
+
+    /// <summary>Fills the line from a saved entry (edit mode): "5 kg" + ৳450 → qty 5, kg, rate 90.</summary>
+    public void Load(string? name, string? quantity, long amount)
+    {
+        Name = name ?? "";
+        var (qty, unit) = ItemMath.Parse(quantity);
+        _calculating = true;
+        SelectedUnit = qty is null ? Units[1] : Units.First(u => u.Id == (unit is null ? -1 : Array.IndexOf(ItemMath.Units, unit)));
+        QuantityText = qty is { } q ? ItemMath.Format(q, null)! : quantity ?? "";
+        RateText = qty is { } q2 && ItemMath.Rate(q2, unit, amount) is { } r && ItemMath.Price(q2, unit, r) == amount
+            ? Fmt.EditableAmount(r)
+            : "";
+        PriceText = Fmt.EditableAmount(amount);
+        _calculating = false;
+        ShowCalculation();
+    }
 
     [RelayCommand]
     private void Remove() => _remove(this);
+
+    /// <summary>"+ Sub": a new sub-category of the chosen category, selected on this line (ADR 0027).</summary>
+    [RelayCommand]
+    private Task NewSub() => _newSub(this);
 }
 
 /// <summary>
@@ -79,8 +176,21 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     [ObservableProperty] private Option? _selectedCard;
     [ObservableProperty] private string _accountLabel = "";
     [ObservableProperty] private string _personName = "";
-    [ObservableProperty] private bool _hasReturnDate;
-    [ObservableProperty] private DateTime _returnDate = DateTime.Today.AddMonths(1);
+    /// <summary>Borrow: the month it is to be paid back, no day (ADR 0030). First option = not decided.</summary>
+    [ObservableProperty] private List<Option> _payMonths = [];
+    [ObservableProperty] private Option? _selectedPayMonth;
+    private List<string?> _payMonthKeys = [];
+
+    partial void OnDateChanged(DateTime value) => FillPayMonths();
+
+    private void FillPayMonths()
+    {
+        var options = Display.PayMonthOptions(Date);
+        _payMonthKeys = [.. options.Values];
+        var keep = SelectedPayMonth is { } o && o.Id < _payMonthKeys.Count ? _payMonthKeys[o.Id] : null;
+        PayMonths = options.Keys.Select((label, i) => new Option(i, label)).ToList();
+        SelectedPayMonth = PayMonths.ElementAtOrDefault(Math.Max(0, _payMonthKeys.IndexOf(keep)));
+    }
     [ObservableProperty] private DateTime _date = DateTime.Today;
     [ObservableProperty] private string _note = "";
 
@@ -160,6 +270,7 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
         // Edit form already filled: keep what the user has changed when the page re-appears.
         if (_editLoaded) return;
         _snapshot = await _finance.LoadAsync();
+        if (PayMonths.Count == 0) FillPayMonths();
         Accounts = Display.AccountOptions(_snapshot);
         Cards = _snapshot.Cards.Select(c => new Option(c.Id, c.Name)).ToList();
         SelectedAccount ??= Accounts.FirstOrDefault();
@@ -224,9 +335,7 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
             UseItems = true; // adds one line
             var line = Lines[0];
             line.SelectedSub = line.SubCategories.FirstOrDefault(o => o.Id == t.CategoryId) ?? line.SelectedSub;
-            line.Name = t.ItemName ?? "";
-            line.Quantity = t.Quantity ?? "";
-            line.PriceText = Fmt.EditableAmount(t.Amount);
+            line.Load(t.ItemName, t.Quantity, t.Amount);
         }
         else
         {
@@ -296,6 +405,19 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
         if (name is null) return;
 
         var kind = _type == "income" ? CategoryKind.Income : CategoryKind.Expense;
+
+        // No duplicates (ADR 0027): an existing category is selected instead.
+        if (_snapshot?.FindCategory(name, kind) is { } existing)
+        {
+            if (existing.ParentId is null && Categories.FirstOrDefault(c => c.Id == existing.Id) is { } option)
+            {
+                SelectedCategory = option;
+                await Ui.Alert(Loc.F("Category_ExistsSelected", option.Display));
+            }
+            else await Ui.Alert(Display.CategoryExists(existing, _snapshot));
+            return;
+        }
+
         Category? created = null;
         if (!await Ui.Try(async () => created = await _finance.AddCategoryAsync(name, kind, null))) return;
 
@@ -306,8 +428,42 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
         SelectedCategory = Categories.FirstOrDefault(c => c.Id == created!.Id);
     }
 
+    /// <summary>
+    /// "+ Sub" on an item line: a new sub-category under the chosen category (Transport → Uber), selected
+    /// on that line and offered on the other lines. A name that already exists is selected, not added again.
+    /// </summary>
+    private async Task NewSub(ItemLine line)
+    {
+        if (_snapshot is null || SelectedCategory is not { } parent) return;
+        var name = await Ui.PromptText(Loc.F("NewSub_Prompt", parent.Display));
+        if (name is null) return;
+
+        if (_snapshot.FindCategory(name, CategoryKind.Expense) is { } existing)
+        {
+            if (line.SubCategories.FirstOrDefault(o => o.Id == existing.Id) is { } option)
+            {
+                line.SelectedSub = option;
+                await Ui.Alert(Loc.F("Category_ExistsSelected", option.Display));
+            }
+            else await Ui.Alert(Display.CategoryExists(existing, _snapshot));
+            return;
+        }
+
+        Category? created = null;
+        if (!await Ui.Try(async () => created = await _finance.AddCategoryAsync(name, CategoryKind.Expense, parent.Id))) return;
+
+        _snapshot = await _finance.LoadAsync();
+        var subs = SubOptions();
+        foreach (var l in Lines)
+        {
+            var keep = l.SelectedSub?.Id;
+            l.SubCategories = subs;
+            l.SelectedSub = subs.FirstOrDefault(o => o.Id == (l == line ? created!.Id : keep)) ?? subs.FirstOrDefault();
+        }
+    }
+
     [RelayCommand]
-    private void AddLine() => Lines.Add(new ItemLine(SubOptions(), UpdateTotal, RemoveLine));
+    private void AddLine() => Lines.Add(new ItemLine(SubOptions(), UpdateTotal, RemoveLine, NewSub));
 
     private void RemoveLine(ItemLine line)
     {
@@ -356,7 +512,7 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
                 // Edit: one entry, from the amount box or the single item line (ADR 0026).
                 var line = Lines.FirstOrDefault();
                 var tx = ShowItems && line is not null
-                    ? Make(Fmt.ParseMoney(line.PriceText) ?? 0, line.SelectedSub?.Id ?? SelectedCategory?.Id, line.Name, line.Quantity)
+                    ? Make(Fmt.ParseMoney(line.PriceText) ?? 0, line.SelectedSub?.Id ?? SelectedCategory?.Id, line.Name, line.StoredQuantity)
                     : Make(Fmt.ParseMoney(AmountText) ?? 0, SelectedCategory?.Id, null, null);
                 tx.Id = _editing.Id;
                 await _finance.UpdateTransactionAsync(tx);
@@ -369,7 +525,9 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
                     Direction = _type == "borrow" ? DebtDirection.Borrowed : DebtDirection.Lent,
                     Amount = Fmt.ParseMoney(AmountText) ?? 0,
                     Date = Date,
-                    ExpectedReturnDate = _type == "borrow" && HasReturnDate ? ReturnDate : null,
+                    ExpectedReturnDate = _type == "borrow" && SelectedPayMonth is { } pm && _payMonthKeys.ElementAtOrDefault(pm.Id) is { } payMonth
+                        ? Core.MonthKey.LastDay(payMonth)
+                        : null,
                     AccountId = SelectedAccount?.Id,
                     Note = note
                 });
@@ -377,8 +535,9 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
             else if (ShowItems)
             {
                 // Blank lines are skipped; a line with a name but no price is an error (amount 0).
+                // Qty is optional: "Uber ৳250" is a complete line (ADR 0027).
                 var lines = Lines.Where(l => !string.IsNullOrWhiteSpace(l.Name) || !string.IsNullOrWhiteSpace(l.PriceText))
-                    .Select(l => Make(Fmt.ParseMoney(l.PriceText) ?? 0, l.SelectedSub?.Id ?? SelectedCategory?.Id, l.Name, l.Quantity))
+                    .Select(l => Make(Fmt.ParseMoney(l.PriceText) ?? 0, l.SelectedSub?.Id ?? SelectedCategory?.Id, l.Name, l.StoredQuantity))
                     .ToList();
                 await _finance.AddTransactionsAsync(lines);
             }

@@ -18,6 +18,33 @@ public static class LiabilityEngine
     /// The first <see cref="Loan.InstallmentsPaidBefore"/> installments are marked Paid without a
     /// payment transaction: they were paid before the loan was entered (ADR 0012).
     /// </summary>
+    /// <summary>
+    /// <paramref name="count"/> installments of <paramref name="total"/> numbered from <paramref name="firstSequence"/>,
+    /// monthly from <paramref name="firstMonth"/>; the last one takes the rounding remainder (ADR 0034: Convert to EMI).
+    /// </summary>
+    public static List<Due> BuildInstallments(Loan loan, int firstSequence, string firstMonth, long total, int count)
+    {
+        var per = total / count;
+        var last = firstSequence + count - 1;
+        return Enumerable.Range(0, count).Select(i =>
+        {
+            var month = MonthKey.Add(firstMonth, i);
+            var sequence = firstSequence + i;
+            return new Due
+            {
+                SourceType = DueSource.Loan,
+                SourceId = loan.Id,
+                PeriodKey = sequence.ToString(CultureInfo.InvariantCulture),
+                Sequence = sequence,
+                Title = $"{loan.Lender} ({sequence}/{last})",
+                DueMonth = month,
+                DueDate = MonthKey.DayIn(month, loan.DueDay),
+                Amount = i < count - 1 ? per : total - per * (count - 1),
+                Status = DueStatus.Pending
+            };
+        }).ToList();
+    }
+
     public static List<Due> BuildLoanSchedule(Loan loan)
     {
         if (loan.InstallmentCount <= 0) throw new ArgumentException("InstallmentCount must be > 0.");

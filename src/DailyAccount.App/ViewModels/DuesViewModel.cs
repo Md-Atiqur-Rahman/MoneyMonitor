@@ -10,9 +10,12 @@ using DailyAccount.Core.Models;
 namespace DailyAccount.App.ViewModels;
 
 /// <summary>One budget item on the Dues page: what is left to pay, with a shortcut to record the expense.</summary>
-public sealed record BudgetDueRow(string Name, string Subtitle, string Amount, Color AmountColor, string ActionText, ICommand? Action, bool Highlight = false)
+/// <param name="Second">"Skip" / "Undo" — won't pay this item this month (ADR 0031).</param>
+public sealed record BudgetDueRow(string Name, string Subtitle, string Amount, Color AmountColor, string ActionText, ICommand? Action, bool Highlight = false,
+    string SecondText = "", ICommand? Second = null, bool Struck = false)
 {
     public bool HasAction => Action is not null;
+    public bool HasSecond => Second is not null;
 }
 
 public sealed record DuesModel(
@@ -24,6 +27,7 @@ public sealed record DuesModel(
     List<BudgetDueRow> NotPaid,
     List<DueRow> OtherDues,
     List<BudgetDueRow> FullyPaid,
+    List<BudgetDueRow> Skipped,
     List<DueRow> CardThisMonth,
     List<DueRow> NoDate,
     List<DueRow> CardPaid,
@@ -33,6 +37,7 @@ public sealed record DuesModel(
     public bool NothingDue => NotPaid.Count == 0 && OtherDues.Count == 0;
     public bool HasOtherDues => OtherDues.Count > 0;
     public bool HasFullyPaid => FullyPaid.Count > 0;
+    public bool HasSkipped => Skipped.Count > 0;
     public bool HasCardThisMonth => CardThisMonth.Count > 0;
     public bool HasNoDate => NoDate.Count > 0;
     public bool HasCardPaid => CardPaid.Count > 0;
@@ -44,13 +49,13 @@ public sealed record DuesModel(
 /// Dues page (ADR 0024): first the month's "Due" — the budget items not paid yet, the sheet's "Due"
 /// column, same number as on Home — then card &amp; loan payments as a separate section, not in that total.
 /// </summary>
-public sealed partial class DuesViewModel(FinanceService finance, AppSettings settings) : ViewModelBase, IQueryAttributable
+public sealed partial class DuesViewModel(FinanceService finance, AppSettings settings, MonthState months) : ViewModelBase, IQueryAttributable
 {
     /// <summary>Category whose row should be highlighted and scrolled to (from Budget → Due), used once.</summary>
     private int? _focus;
 
-    /// <summary>The month shown (ADR 0025): current by default, ‹ › or ?month= to change it.</summary>
-    private string _month = MonthKey.Of(DateTime.Today);
+    /// <summary>The month shown, shared by every page (ADR 0029).</summary>
+    private string SelectedMonth { get => months.Month; set => months.Month = value; }
 
     [ObservableProperty]
     private DuesModel? _model;
@@ -63,9 +68,9 @@ public sealed partial class DuesViewModel(FinanceService finance, AppSettings se
         if (query.TryGetValue("focus", out var f) && int.TryParse(f?.ToString(), out var id))
         {
             _focus = id;
-            _month = MonthKey.Of(DateTime.Today); // unless ?month= below says which month (Budget → Due)
+            SelectedMonth = MonthKey.Of(DateTime.Today); // unless ?month= below says which month (Budget → Due)
         }
-        if (query.TryGetValue("month", out var m) && m?.ToString() is { Length: 7 } month) _month = month;
+        if (query.TryGetValue("month", out var m) && m?.ToString() is { Length: 7 } month) SelectedMonth = month;
         query.Clear(); // don't re-apply on the next visit
     }
 
@@ -73,7 +78,7 @@ public sealed partial class DuesViewModel(FinanceService finance, AppSettings se
     {
         var today = DateTime.Today;
         var current = MonthKey.Of(today);
-        var month = _month;
+        var month = SelectedMonth;
         var next = MonthKey.Add(month, 1);
         await finance.GenerateDuesAsync(today);
         await finance.ApplyDefaultBudgetAsync(current);
@@ -104,7 +109,17 @@ public sealed partial class DuesViewModel(FinanceService finance, AppSettings se
             open && !isFuture
                 ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.AddTransaction}?type=expense&categoryId={l.CategoryId}&amount={l.Left}{dateParam}"))
                 : null,
-            l.CategoryId == focus);
+            l.CategoryId == focus,
+            Loc.T("Dues_Skip"),
+            open ? new AsyncRelayCommand(() => SkipAsync(l.CategoryId, true)) : null);
+
+        // Struck through: won't pay this month (ADR 0031); "Undo" brings it back into the Due.
+        BudgetDueRow SkippedRow(Core.Services.BudgetLine l) => new(
+            Display.CategoryName(l.CategoryId, s),
+            Loc.F("Budget_Skipped", Fmt.Money(l.Planned)),
+            Fmt.Money(l.Planned - l.Spent), Display.Muted,
+            Loc.T("Dues_Unskip"), new AsyncRelayCommand(() => SkipAsync(l.CategoryId, false)),
+            Struck: true);
 
         // Card & loan payments (not in the Due total, like the sheet).
         var cardDueIds = s.Cards.SelectMany(c => s.CardDues(c.Id)).Select(d => d.Id).ToHashSet();
@@ -119,7 +134,8 @@ public sealed partial class DuesViewModel(FinanceService finance, AppSettings se
             Progress: plan.BudgetEstimate == 0 ? 0 : Math.Min(1, (double)plan.BudgetSpent / plan.BudgetEstimate),
             NotPaid: items.Where(l => l.Left > 0).Select(l => Row(l, true)).ToList(),
             OtherDues: Display.DueRows(s.NonCardDuesUpTo(month), s),
-            FullyPaid: items.Where(l => l.Left <= 0).Select(l => Row(l, false)).ToList(),
+            FullyPaid: items.Where(l => l.Left <= 0 && !(l.Skipped && l.Planned > l.Spent)).Select(l => Row(l, false)).ToList(),
+            Skipped: items.Where(l => l.Skipped && l.Planned > l.Spent).Select(SkippedRow).ToList(),
             CardThisMonth: CardRows(d => d.DueMonth.Length > 0 && string.CompareOrdinal(d.DueMonth, month) <= 0 && d.Status != DueStatus.Paid),
             NoDate: Display.DueRows(s.Dues.Where(d => d.DueMonth.Length == 0 && d.Status != DueStatus.Paid), s),
             CardPaid: CardRows(d => d.DueMonth == month && d.Status == DueStatus.Paid),
@@ -129,17 +145,22 @@ public sealed partial class DuesViewModel(FinanceService finance, AppSettings se
         FocusRow = Model.NotPaid.FirstOrDefault(r => r.Highlight);
     }
 
+    private async Task SkipAsync(int categoryId, bool skipped)
+    {
+        if (await Ui.Try(() => finance.SetBudgetSkippedAsync(SelectedMonth, categoryId, skipped))) await LoadAsync();
+    }
+
     [RelayCommand]
     private Task Previous()
     {
-        _month = MonthKey.Add(_month, -1);
+        SelectedMonth = MonthKey.Add(SelectedMonth, -1);
         return LoadAsync();
     }
 
     [RelayCommand]
     private Task Next()
     {
-        _month = MonthKey.Add(_month, 1);
+        SelectedMonth = MonthKey.Add(SelectedMonth, 1);
         return LoadAsync();
     }
 }

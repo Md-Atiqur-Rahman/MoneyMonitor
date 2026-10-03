@@ -40,6 +40,8 @@ public sealed class FinanceDatabase
 
             if (await Connection.Table<Category>().CountAsync() == 0)
                 await Connection.RunInTransactionAsync(SeedCategories);
+            if (await Connection.FindAsync<AppMeta>(CategoryOrderKey) is null)
+                await Connection.RunInTransactionAsync(UpdateDefaultCategories);
 
             _initialized = true;
         }
@@ -57,25 +59,29 @@ public sealed class FinanceDatabase
         ("Salary", "বেতন", CategoryKind.Income, []),
         ("Bonus", "বোনাস", CategoryKind.Income, []),
         ("Other income", "অন্যান্য আয়", CategoryKind.Income, []),
+        // Expense categories in the user's order (ADR 0027).
         ("Bajar", "বাজার", CategoryKind.Expense,
         [
             ("Grocery", "মুদি"), ("Meat", "মাংস"), ("Fish", "মাছ"), ("Vegetables", "সবজি"),
             ("Tiffin", "নাস্তা"), ("Cosmetics", "প্রসাধনী")
         ]),
-        ("Fruits", "ফল", CategoryKind.Expense, []),
-        ("Transport", "যাতায়াত", CategoryKind.Expense, []),
-        ("Medicine", "ওষুধ", CategoryKind.Expense, []),
-        ("Rent", "বাসা ভাড়া", CategoryKind.Expense, []),
-        ("Gas", "গ্যাস", CategoryKind.Expense, []),
-        ("Electric", "বিদ্যুৎ", CategoryKind.Expense, []),
-        ("Wifi", "ওয়াইফাই", CategoryKind.Expense, []),
-        ("Mobile", "মোবাইল", CategoryKind.Expense, []),
-        // DPS is back as a default because it is in the default budget (ADR 0020); Certificate stays removed.
-        ("DPS", "ডিপিএস", CategoryKind.Expense, []),
         ("Education", "শিক্ষা", CategoryKind.Expense, []),
         ("Family", "পরিবার", CategoryKind.Expense, []),
+        ("Baby Care", "শিশুর যত্ন", CategoryKind.Expense, []),
+        ("Medicine", "ওষুধ", CategoryKind.Expense, []),
+        ("Fruits", "ফল", CategoryKind.Expense, []),
+        ("Gas", "গ্যাস", CategoryKind.Expense, []),
+        ("Wifi", "ওয়াইফাই", CategoryKind.Expense, []),
+        ("Mobile", "মোবাইল", CategoryKind.Expense, []),
+        ("Rent", "বাসা ভাড়া", CategoryKind.Expense, []),
+        // DPS is back as a default because it is in the default budget (ADR 0020); Certificate stays removed.
+        ("DPS", "ডিপিএস", CategoryKind.Expense, []),
+        ("Electric", "বিদ্যুৎ", CategoryKind.Expense, []),
+        ("Transport", "যাতায়াত", CategoryKind.Expense, []),
         ("Others", "অন্যান্য", CategoryKind.Expense, []),
     ];
+
+    private const string CategoryOrderKey = "category-order-v2";
 
     /// <summary>
     /// The fixed monthly budget every user starts with, in taka (ADR 0020). Added once, without any
@@ -97,6 +103,37 @@ public sealed class FinanceDatabase
         ("Transport", "যাতায়াত", 2_000),
         ("Others", "অন্যান্য", 1_000),
     ];
+
+    /// <summary>
+    /// Once per database (ADR 0027): adds default categories that are missing (Baby Care) and puts the
+    /// default expense categories in the user's order; the user's own categories follow them.
+    /// A default the user deleted on purpose is not brought back, except Baby Care, which is new.
+    /// </summary>
+    private static void UpdateDefaultCategories(SQLiteConnection c)
+    {
+        var all = c.Table<Category>().ToList();
+        var top = all.Where(x => x.ParentId is null && x.Kind == CategoryKind.Expense).ToList();
+        var order = 0;
+        foreach (var (name, bn, kind, _) in Defaults.Where(d => d.Kind == CategoryKind.Expense))
+        {
+            var existing = top.FirstOrDefault(x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                if (name != "Baby Care" || all.Any(x => x.Kind == kind && Category.SameName(x, name))) continue;
+                c.Insert(new Category { Name = name, NameBn = bn, Kind = kind, SortOrder = order++ });
+                continue;
+            }
+            existing.SortOrder = order++;
+            c.Update(existing);
+            top.Remove(existing);
+        }
+        foreach (var own in top.OrderBy(x => x.SortOrder).ThenBy(x => x.Name))
+        {
+            own.SortOrder = order++;
+            c.Update(own);
+        }
+        c.InsertOrReplace(new AppMeta { Key = CategoryOrderKey, Value = "done" });
+    }
 
     private static void SeedCategories(SQLiteConnection c)
     {

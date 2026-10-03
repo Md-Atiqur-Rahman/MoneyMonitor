@@ -24,7 +24,10 @@
                 <Label Text="{Binding Name}" FontAttributes="Bold" />
                 <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
                 <Label Grid.Column="1" Text="{Binding Remaining}" TextColor="{Binding RemainingColor}" Style="{StaticResource Amount}" HorizontalOptions="End" />
-                <Button Grid.Row="1" Grid.Column="1" Text="{Binding ActionText}" Command="{Binding Action}" IsVisible="{Binding CanAct}" Style="{StaticResource Small}" HorizontalOptions="End" />
+                <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="6" HorizontalOptions="End">
+                    <Button Text="{Binding SecondText}" Command="{Binding Second}" IsVisible="{Binding HasSecond}" Style="{StaticResource SmallOutline}" />
+                    <Button Text="{Binding ActionText}" Command="{Binding Action}" IsVisible="{Binding CanAct}" Style="{StaticResource Small}" />
+                </HorizontalStackLayout>
             </Grid>
         </DataTemplate>
     </ContentPage.Resources>
@@ -33,6 +36,21 @@
         <VerticalStackLayout Padding="20" Spacing="16">
 
             <Label Text="{loc:Tr Liab_Title}" Style="{StaticResource H1}" />
+
+            <!-- ‹ month › shared by every page (ADR 0029) -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousMonthCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <Label Grid.Column="1" Text="{Binding MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextMonthCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
+            <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource InfoTint}" IsVisible="{Binding IsPastMonth}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Text="{loc:Tr Home_PastMonthNote}" TextColor="{StaticResource Info}" FontSize="14" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="{loc:Tr Home_BackToThisMonth}" Command="{Binding ThisMonthCommand}" Style="{StaticResource SmallOutline}" />
+                </Grid>
+            </Border>
 
             <!-- Card face, always on top (ADR 0023): this month's payment first, then what is available -->
             <VerticalStackLayout Spacing="12" BindableLayout.ItemsSource="{Binding Cards}">
@@ -60,7 +78,8 @@
 
             <!-- Section switch -->
             <Border BackgroundColor="{StaticResource Surface}" Stroke="{StaticResource Line}" StrokeShape="RoundRectangle 24" Padding="4">
-                <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="2">
+                <!-- Cards | This month | Last month | Loans | Personal (ADR 0031): two rows so the words fit -->
+                <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="2" RowSpacing="2">
                     <Button Grid.Column="0" Text="{loc:Tr Cards}" Command="{Binding ShowSectionCommand}" CommandParameter="1" Style="{StaticResource Seg}">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding ShowCards}" Value="True">
@@ -69,7 +88,15 @@
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
-                    <Button Grid.Column="1" Text="{loc:Tr Liab_LastMonth}" Command="{Binding ShowSectionCommand}" CommandParameter="3" Style="{StaticResource Seg}">
+                    <Button Grid.Column="1" Text="{loc:Tr Liab_ThisMonth}" Command="{Binding ShowSectionCommand}" CommandParameter="4" Style="{StaticResource Seg}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding ShowThis}" Value="True">
+                                <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
+                                <Setter Property="TextColor" Value="White" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                    <Button Grid.Column="2" Text="{loc:Tr Liab_LastMonth}" Command="{Binding ShowSectionCommand}" CommandParameter="3" Style="{StaticResource Seg}">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding ShowPast}" Value="True">
                                 <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
@@ -77,7 +104,7 @@
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
-                    <Button Grid.Column="2" Text="{loc:Tr Loans}" Command="{Binding ShowSectionCommand}" CommandParameter="0" Style="{StaticResource Seg}">
+                    <Button Grid.Row="1" Grid.Column="0" Text="{loc:Tr Loans}" Command="{Binding ShowSectionCommand}" CommandParameter="0" Style="{StaticResource Seg}">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding ShowLoans}" Value="True">
                                 <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
@@ -85,7 +112,7 @@
                             </DataTrigger>
                         </Button.Triggers>
                     </Button>
-                    <Button Grid.Column="3" Text="{loc:Tr Personal}" Command="{Binding ShowSectionCommand}" CommandParameter="2" Style="{StaticResource Seg}">
+                    <Button Grid.Row="1" Grid.Column="1" Text="{loc:Tr Personal}" Command="{Binding ShowSectionCommand}" CommandParameter="2" Style="{StaticResource Seg}">
                         <Button.Triggers>
                             <DataTrigger TargetType="Button" Binding="{Binding ShowOther}" Value="True">
                                 <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
@@ -118,6 +145,12 @@
                                     </Grid>
                                     <ProgressBar Progress="{Binding Progress}" />
                                     <Label Text="{Binding NextText}" FontSize="14" />
+                                    <!-- Change month · Convert to EMI · Pay (ADR 0034) -->
+                                    <FlexLayout Wrap="Wrap" JustifyContent="End" IsVisible="{Binding HasActions}">
+                                        <Button Text="{loc:Tr Debt_ChangeMonth}" Command="{Binding Move}" IsVisible="{Binding CanMove}" Style="{StaticResource SmallOutline}" Margin="0,0,6,6" />
+                                        <Button Text="{loc:Tr Loan_Convert}" Command="{Binding Convert}" IsVisible="{Binding CanConvert}" Style="{StaticResource SmallOutline}" Margin="0,0,6,6" />
+                                        <Button Text="{loc:Tr Repay}" Command="{Binding Pay}" IsVisible="{Binding CanPay}" Style="{StaticResource Small}" Margin="0,0,0,6" />
+                                    </FlexLayout>
                                 </VerticalStackLayout>
                             </Border>
                         </DataTemplate>
@@ -137,7 +170,14 @@
                                     <VerticalStackLayout Spacing="6">
                                         <Label Text="{loc:Tr Card_ThisMonth}" Style="{StaticResource Caption}" />
                                         <Grid ColumnDefinitions="*,Auto">
-                                            <Label Text="{Binding ThisMonth}" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource Warn}" VerticalOptions="Center" />
+                                            <Label Text="{Binding ThisMonth}" FontSize="24" FontAttributes="Bold" TextColor="{StaticResource Warn}" VerticalOptions="Center">
+                                                <!-- A paid bill is green, not the "to pay" orange -->
+                                                <Label.Triggers>
+                                                    <DataTrigger TargetType="Label" Binding="{Binding ThisMonthPaid}" Value="True">
+                                                        <Setter Property="TextColor" Value="{StaticResource Primary}" />
+                                                    </DataTrigger>
+                                                </Label.Triggers>
+                                            </Label>
                                             <Button Grid.Column="1" Text="{loc:Tr Card_PayBill}" Command="{Binding Pay}" IsVisible="{Binding CanPay}" Style="{StaticResource Small}" />
                                         </Grid>
                                         <Label Text="{Binding ThisMonthSub}" Style="{StaticResource Muted}" IsVisible="{Binding CanPay}" />
@@ -153,33 +193,64 @@
                                             <Label Grid.Column="1" Text="›" FontSize="24" TextColor="{StaticResource Muted}" VerticalOptions="Center" />
                                         </Grid>
                                         <BoxView Style="{StaticResource Divider}" Margin="0,6" />
-                                        <!-- Next month so far: tap → Loans tab (the EMIs), ADR 0022 note -->
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <Grid.GestureRecognizers>
-                                                <TapGestureRecognizer Command="{Binding ShowLoans}" />
-                                            </Grid.GestureRecognizers>
-                                            <VerticalStackLayout Spacing="2">
-                                                <Label Text="{loc:Tr Card_NextMonth}" Style="{StaticResource Caption}" />
-                                                <Label Text="{Binding NextMonth}" FontSize="18" FontAttributes="Bold" />
-                                                <Label Text="{Binding NextMonthSub}" Style="{StaticResource Muted}" />
-                                            </VerticalStackLayout>
-                                            <Label Grid.Column="1" Text="›" FontSize="24" TextColor="{StaticResource Muted}" VerticalOptions="Center" />
+                                        <!-- Next month so far (ADR 0031): EMI → Loans tab, Purchases → This month tab -->
+                                        <Label Text="{Binding NextMonthTitle}" Style="{StaticResource Caption}" />
+                                        <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+                                            <Label Text="{loc:Tr Card_NextEmi}" VerticalOptions="Center">
+                                                <Label.GestureRecognizers><TapGestureRecognizer Command="{Binding ShowLoans}" /></Label.GestureRecognizers>
+                                            </Label>
+                                            <Label Grid.Column="1" Text="{Binding NextEmi}" FontAttributes="Bold" HorizontalOptions="End">
+                                                <Label.GestureRecognizers><TapGestureRecognizer Command="{Binding ShowLoans}" /></Label.GestureRecognizers>
+                                            </Label>
+                                            <Label Grid.Column="2" Text="›" FontSize="20" TextColor="{StaticResource Muted}">
+                                                <Label.GestureRecognizers><TapGestureRecognizer Command="{Binding ShowLoans}" /></Label.GestureRecognizers>
+                                            </Label>
+                                            <Label Grid.Row="1" Text="{loc:Tr Card_NextPurchases}" VerticalOptions="Center">
+                                                <Label.GestureRecognizers><TapGestureRecognizer Command="{Binding ShowThisMonth}" /></Label.GestureRecognizers>
+                                            </Label>
+                                            <Label Grid.Row="1" Grid.Column="1" Text="{Binding NextPurchases}" FontAttributes="Bold" HorizontalOptions="End">
+                                                <Label.GestureRecognizers><TapGestureRecognizer Command="{Binding ShowThisMonth}" /></Label.GestureRecognizers>
+                                            </Label>
+                                            <Label Grid.Row="1" Grid.Column="2" Text="›" FontSize="20" TextColor="{StaticResource Muted}">
+                                                <Label.GestureRecognizers><TapGestureRecognizer Command="{Binding ShowThisMonth}" /></Label.GestureRecognizers>
+                                            </Label>
+                                            <BoxView Grid.Row="2" Grid.ColumnSpan="3" Style="{StaticResource Divider}" />
+                                            <Label Grid.Row="3" Text="{loc:Tr Card_NextTotal}" FontAttributes="Bold" />
+                                            <Label Grid.Row="3" Grid.Column="1" Text="{Binding NextTotal}" FontSize="18" FontAttributes="Bold" HorizontalOptions="End" />
                                         </Grid>
+                                        <Label Text="{Binding NextSub}" Style="{StaticResource Muted}" />
                                     </VerticalStackLayout>
                                 </Border>
 
-                                <!-- Purchases this cycle -->
-                                <Border Style="{StaticResource Card}" Padding="16,8" IsVisible="{Binding HasPurchases}">
-                                    <VerticalStackLayout>
-                                        <Label Text="{loc:Tr Card_Purchases}" Style="{StaticResource Caption}" Margin="0,6,0,0" />
-                                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Purchases}" BindableLayout.ItemTemplate="{StaticResource TxRowTemplate}" />
-                                    </VerticalStackLayout>
-                                </Border>
                             </VerticalStackLayout>
                         </DataTemplate>
                     </BindableLayout.ItemTemplate>
                 </VerticalStackLayout>
                 <Button Text="{loc:Tr AddCard}" Command="{Binding AddCardCommand}" Style="{StaticResource Outline}" />
+            </VerticalStackLayout>
+
+            <!-- ===== This month's card purchases (ADR 0031) ===== -->
+            <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowThis}">
+                <Label Text="{loc:Tr Liab_ThisMonthHint}" Style="{StaticResource Muted}" />
+                <VerticalStackLayout Spacing="12" BindableLayout.ItemsSource="{Binding ThisMonthPurchases}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PurchaseGroup">
+                            <Border Style="{StaticResource Card}" Padding="16,10">
+                                <VerticalStackLayout>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <VerticalStackLayout>
+                                            <Label Text="{Binding Title}" FontAttributes="Bold" />
+                                            <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="1" Text="{Binding Total}" Style="{StaticResource Amount}" VerticalOptions="Center" />
+                                    </Grid>
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Items}" BindableLayout.ItemTemplate="{StaticResource TxRowTemplate}" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+                <Label Text="{loc:Tr Dues_Nothing}" Style="{StaticResource Muted}" IsVisible="{Binding ThisEmpty}" />
             </VerticalStackLayout>
 
             <!-- ===== Card purchases of earlier months (ADR 0022) ===== -->
@@ -236,7 +307,15 @@
                 <VerticalStackLayout Spacing="10">
                     <Label Text="{loc:Tr Liab_TotalOwe}" Style="{StaticResource Caption}" />
                     <Label Text="{Binding TotalOwe}" FontSize="28" FontAttributes="Bold" TextColor="{StaticResource Warn}" />
-                    <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="6">
+                    <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" ColumnSpacing="6" RowSpacing="10">
+                        <!-- This month (ADR 0031) -->
+                        <VerticalStackLayout Grid.Column="1">
+                            <VerticalStackLayout.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="4" />
+                            </VerticalStackLayout.GestureRecognizers>
+                            <Label Text="{loc:Tr Liab_ThisMonth}" Style="{StaticResource Muted}" FontSize="12" TextDecorations="Underline" />
+                            <Label Text="{Binding ThisMonthOwe}" FontAttributes="Bold" FontSize="12" />
+                        </VerticalStackLayout>
                         <VerticalStackLayout>
                             <VerticalStackLayout.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="1" />
@@ -244,21 +323,21 @@
                             <Label Text="{loc:Tr Cards}" Style="{StaticResource Muted}" FontSize="12" TextDecorations="Underline" />
                             <Label Text="{Binding CardsOwe}" FontAttributes="Bold" FontSize="12" />
                         </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Column="1">
+                        <VerticalStackLayout Grid.Column="2">
                             <VerticalStackLayout.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="3" />
                             </VerticalStackLayout.GestureRecognizers>
                             <Label Text="{loc:Tr Liab_LastMonth}" Style="{StaticResource Muted}" FontSize="12" TextDecorations="Underline" />
                             <Label Text="{Binding LastMonthOwe}" FontAttributes="Bold" FontSize="12" />
                         </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Column="2">
+                        <VerticalStackLayout Grid.Row="1">
                             <VerticalStackLayout.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="0" />
                             </VerticalStackLayout.GestureRecognizers>
                             <Label Text="{loc:Tr Loans}" Style="{StaticResource Muted}" FontSize="12" TextDecorations="Underline" />
                             <Label Text="{Binding LoansOwe}" FontAttributes="Bold" FontSize="12" />
                         </VerticalStackLayout>
-                        <VerticalStackLayout Grid.Column="3">
+                        <VerticalStackLayout Grid.Row="1" Grid.Column="1">
                             <VerticalStackLayout.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ShowSectionCommand}" CommandParameter="2" />
                             </VerticalStackLayout.GestureRecognizers>

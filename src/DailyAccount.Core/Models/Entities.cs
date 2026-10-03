@@ -27,6 +27,14 @@ public class Category
     /// <summary>Parent category for a sub-category; null for top level.</summary>
     [Indexed] public int? ParentId { get; set; }
     public int SortOrder { get; set; }
+
+    /// <summary>True when <paramref name="name"/> is this category's English or Bangla name (trimmed, any case).</summary>
+    public static bool SameName(Category c, string name)
+    {
+        name = name.Trim();
+        return string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)
+               || (c.NameBn is not null && string.Equals(c.NameBn, name, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 [Table("Transactions")]
@@ -43,6 +51,8 @@ public class Transaction
     [Indexed] public int? CardId { get; set; }
     [Indexed] public int? DueId { get; set; }
     [Indexed] public int? DebtId { get; set; }
+    /// <summary>Money received for a loan (BorrowIn), so it counts in that month's income (ADR 0034).</summary>
+    [Indexed] public int? LoanId { get; set; }
     public string? Note { get; set; }
     /// <summary>What was bought, e.g. "Rice" (ADR 0013).</summary>
     public string? ItemName { get; set; }
@@ -67,6 +77,11 @@ public class Loan
     [Indexed] public int? CardId { get; set; }
     /// <summary>Installments already paid before the loan was entered in the app.</summary>
     public int InstallmentsPaidBefore { get; set; }
+    /// <summary>
+    /// A loan without installments (ADR 0034): one amount due in <see cref="StartMonth"/>, which can be moved,
+    /// until it is converted into EMI.
+    /// </summary>
+    public bool NoInstallments { get; set; }
 }
 
 public class CreditCard
@@ -150,4 +165,10 @@ public class BudgetItem
     /// created before this column existed (NULL → false) keep repeating every month.
     /// </summary>
     public bool OnlyThisMonth { get; set; }
+
+    /// <summary>
+    /// "Won't pay this month" (ADR 0031): shown struck through; only what was already spent counts, so the
+    /// rest leaves the month's budget total and its Due. Per month only — never copied to the next month.
+    /// </summary>
+    public bool Skipped { get; set; }
 }

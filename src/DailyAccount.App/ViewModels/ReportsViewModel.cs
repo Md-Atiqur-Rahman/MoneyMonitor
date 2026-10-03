@@ -26,19 +26,29 @@ public sealed record ReportModel(
     public bool NoItems => TopItems.Count == 0;
 }
 
-public sealed partial class ReportsViewModel(FinanceService finance) : ViewModelBase
+public sealed partial class ReportsViewModel(FinanceService finance, MonthState months) : ViewModelBase, IQueryAttributable
 {
-    private string _month = MonthKey.Of(DateTime.Today);
+    /// <summary>The month shown, shared by every page (ADR 0029).</summary>
+    private string SelectedMonth { get => months.Month; set => months.Month = value; }
+
+    public void ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        // From Home of an earlier month (ADR 0028).
+        if (query.TryGetValue("month", out var m) && m?.ToString() is { Length: 7 } month) SelectedMonth = month;
+        query.Clear();
+    }
 
     [ObservableProperty] private ReportModel? _model;
 
     public override async Task LoadAsync()
     {
         var s = await finance.LoadAsync();
-        var sum = s.Summary(_month);
+        var sum = s.Summary(SelectedMonth);
+        // Cash flow like the sheet (ADR 0032): money in includes borrowing; each line opens its details.
+        var flow = s.CashFlow(SelectedMonth);
 
         var spent = s.Transactions
-            .Where(t => t.Type is TransactionType.Expense or TransactionType.CardPurchase && MonthKey.Contains(_month, t.Date))
+            .Where(t => t.Type is TransactionType.Expense or TransactionType.CardPurchase && MonthKey.Contains(SelectedMonth, t.Date))
             .ToList();
 
         // By top-level category: sub-categories (Fish, Meat…) add up into their parent (Bajar).
@@ -60,23 +70,23 @@ public sealed partial class ReportsViewModel(FinanceService finance) : ViewModel
         var maxItem = items.Count == 0 ? 1 : items.Max(x => x.Amount);
 
         // Savings trend: the selected month and the five before it.
-        var months = Enumerable.Range(0, 6).Select(i => MonthKey.Add(_month, i - 5)).ToList();
-        var savings = months.Select(m => (Month: m, Value: s.Summary(m).ProjectedSavings)).ToList();
+        var months = Enumerable.Range(0, 6).Select(i => MonthKey.Add(SelectedMonth, i - 5)).ToList();
+        var savings = months.Select(m => (Month: m, Value: s.CashFlow(m).Net - s.Summary(m).DueRemaining)).ToList();
         var maxAbs = Math.Max(1, savings.Max(x => Math.Abs(x.Value)));
 
         Model = new ReportModel(
-            MonthTitle: Fmt.Month(_month),
-            Income: "+" + Fmt.Money(sum.Income),
-            DuesPaid: "−" + Fmt.Money(sum.DuePaid),
-            CashExpenses: "−" + Fmt.Money(sum.CashExpenses),
-            SavedSoFar: Fmt.Money(sum.Savings),
+            MonthTitle: Fmt.Month(SelectedMonth),
+            Income: "+" + Fmt.Money(flow.MoneyIn),
+            DuesPaid: "−" + Fmt.Money(flow.DuesPaidTotal),
+            CashExpenses: "−" + Fmt.Money(flow.CashSpent),
+            SavedSoFar: Fmt.Money(flow.Net),
             DuesStill: "−" + Fmt.Money(sum.DueRemaining),
-            ProjectedSavings: Fmt.Money(sum.ProjectedSavings),
+            ProjectedSavings: Fmt.Money(flow.Net - sum.DueRemaining),
             SpendingTotal: Fmt.Money(sum.TotalSpending),
             SpendingSub: Loc.F("SpendingSub", Fmt.Money(sum.CashExpenses), Fmt.Money(sum.CardSpending)),
             // Tap a category to see its groups (Bajar → Grocery, Meat, Fish…) and items (ADR 0017).
             Categories: spending.Select(x => new BarRow(x.Name, Fmt.Money(x.Amount), (double)x.Amount / maxSpend, Display.Positive,
-                x.Id is { } id ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.CategoryReport}?id={id}&month={_month}")) : null)).ToList(),
+                x.Id is { } id ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.CategoryReport}?id={id}&month={SelectedMonth}")) : null)).ToList(),
             TopItems: items.Select(x => new BarRow(x.Name, Fmt.Money(x.Amount), (double)x.Amount / maxItem, Color.FromArgb("#2B5BA8"))).ToList(),
             Trend: savings.Select(x => new BarRow(
                 Fmt.ShortMonth(x.Month),
@@ -85,20 +95,24 @@ public sealed partial class ReportsViewModel(FinanceService finance) : ViewModel
                 x.Value < 0 ? Display.Warn : Display.Positive)).ToList());
     }
 
+    /// <summary>Money in / Dues paid / Cash expenses → their details (ADR 0032).</summary>
     [RelayCommand]
-    private Task OpenEntries() => Services.Ui.Go($"{AppShell.Entries}?month={_month}");
+    private Task OpenFlow(string kind) => Ui.Go($"{AppShell.Flow}?kind={kind}");
+
+    [RelayCommand]
+    private Task OpenEntries() => Services.Ui.Go($"{AppShell.Entries}?month={SelectedMonth}");
 
     [RelayCommand]
     private Task Previous()
     {
-        _month = MonthKey.Add(_month, -1);
+        SelectedMonth = MonthKey.Add(SelectedMonth, -1);
         return LoadAsync();
     }
 
     [RelayCommand]
     private Task Next()
     {
-        _month = MonthKey.Add(_month, 1);
+        SelectedMonth = MonthKey.Add(SelectedMonth, 1);
         return LoadAsync();
     }
 }

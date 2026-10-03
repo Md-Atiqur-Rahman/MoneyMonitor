@@ -46,8 +46,8 @@ public sealed class FinanceServiceTests : IAsyncLifetime
     {
         var first = await _svc.LoadAsync();
         var second = await _svc.LoadAsync();
-        Assert.Equal(22, first.Categories.Count);
-        Assert.Equal(22, second.Categories.Count);
+        Assert.Equal(23, first.Categories.Count);
+        Assert.Equal(23, second.Categories.Count);
         Assert.DoesNotContain(first.Categories, c => c.Name == "Certificate");
         Assert.Contains(first.Categories, c => c.Name == "DPS");
         Assert.Contains(first.Categories, c => c.Name == "Education");

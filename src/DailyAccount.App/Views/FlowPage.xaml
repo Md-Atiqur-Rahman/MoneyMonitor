@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<views:AppPage
+    x:Class="DailyAccount.App.Views.FlowPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:loc="clr-namespace:DailyAccount.App.Localization"
+    xmlns:views="clr-namespace:DailyAccount.App.Views"
+    xmlns:vm="clr-namespace:DailyAccount.App.ViewModels"
+    x:DataType="vm:FlowViewModel"
+    Shell.NavBarIsVisible="True"
+    Title="{Binding Title}">
+
+    <!-- Reports → Cash flow → one line in detail (ADR 0032) -->
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">
+                    <Label Text="{Binding Title}" Style="{StaticResource Caption}" HorizontalOptions="Center" />
+                    <Label Text="{Binding MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" />
+                </VerticalStackLayout>
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
+
+            <Label Text="{Binding Hint}" Style="{StaticResource Muted}" />
+
+            <Border Style="{StaticResource Card}" Padding="16,6">
+                <VerticalStackLayout>
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:FlowRow">
+                                <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" Padding="0,10">
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding Tap}" />
+                                    </Grid.GestureRecognizers>
+                                    <Label Text="{Binding Title}" FontAttributes="Bold" />
+                                    <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" IsVisible="{Binding HasSubtitle}" />
+                                    <Label Grid.Column="1" Grid.RowSpan="2" Text="{Binding Amount}" Style="{StaticResource Amount}" VerticalOptions="Center" />
+                                    <Label Grid.Column="2" Grid.RowSpan="2" Text="›" FontSize="22" TextColor="{StaticResource Muted}" VerticalOptions="Center" IsVisible="{Binding CanTap}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="{loc:Tr Entries_Empty}" Style="{StaticResource Muted}" IsVisible="{Binding IsEmpty}" Padding="0,10" />
+                    <BoxView Style="{StaticResource Divider}" Margin="0,4" />
+                    <Grid ColumnDefinitions="*,Auto" Padding="0,10">
+                        <Label Text="{loc:Tr Card_NextTotal}" FontAttributes="Bold" FontSize="17" />
+                        <Label Grid.Column="1" Text="{Binding Total}" FontAttributes="Bold" FontSize="20" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</views:AppPage>

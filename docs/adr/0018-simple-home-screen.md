@@ -20,6 +20,10 @@
 > payments** (next month's EMIs + this cycle's card purchases) and **Assumed savings** (income − payments −
 > budget; orange when negative), with "after budget ৳x, from income ৳y" underneath.
 
+> **Amended 2026-10-03 (user request):** **Bank Balance** moved into the green card, above **Savings this
+> month**: one card, two parts, each tappable as before (Bank Balance → Accounts, Savings → Budget).
+> The separate Bank Balance card is gone.
+
 ## Context
 The user found Home hard to understand: it showed income, planned, paid+spent, left, a due list, the
 next-month forecast and a net-worth block — too many numbers, several of them overlapping.

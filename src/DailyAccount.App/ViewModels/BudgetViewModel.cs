@@ -11,7 +11,9 @@ using DailyAccount.Core.Services;
 namespace DailyAccount.App.ViewModels;
 
 /// <summary>One line of the budget table: Estimate / Spent / Left, like the sheet.</summary>
-public sealed record BudgetRow(string Name, string Subtitle, string Estimate, string Spent, string Left, Color LeftColor, ICommand Tap, ICommand? Due = null)
+/// <param name="Struck">"Won't pay this month": shown struck through (ADR 0031).</param>
+public sealed record BudgetRow(string Name, string Subtitle, string Estimate, string Spent, string Left, Color LeftColor, ICommand Tap, ICommand? Due = null,
+    bool Struck = false)
 {
     public bool HasSubtitle => Subtitle.Length > 0;
     public bool HasDue => Due is not null;
@@ -29,6 +31,7 @@ public sealed record BudgetModel(
     string MonthTitle,
     string IncomeLabel,
     string Income,
+    string IncomeParts,
     string Payments,
     string BudgetItems,
     string Planned,
@@ -42,15 +45,24 @@ public sealed record BudgetModel(
     ForecastModel? Forecast)
 {
     public bool HasForecast => Forecast is not null;
+    public bool HasIncomeParts => IncomeParts.Length > 0;
     public bool SaveIsOk => !SaveIsNegative;
     public bool HasDues => DueRows.Count > 0;
     public bool IsEmpty => ItemRows.Count == 0;
 }
 
 /// <summary>The monthly plan from the user's sheet (ADR 0011).</summary>
-public sealed partial class BudgetViewModel(FinanceService finance, AppSettings settings) : ViewModelBase
+public sealed partial class BudgetViewModel(FinanceService finance, AppSettings settings, MonthState months) : ViewModelBase, IQueryAttributable
 {
-    private string _month = MonthKey.Of(DateTime.Today);
+    /// <summary>The month shown, shared by every page (ADR 0029).</summary>
+    private string SelectedMonth { get => months.Month; set => months.Month = value; }
+
+    public void ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        // From Home of an earlier month (ADR 0028).
+        if (query.TryGetValue("month", out var m) && m?.ToString() is { Length: 7 } month) SelectedMonth = month;
+        query.Clear();
+    }
     private FinanceSnapshot? _snapshot;
 
     [ObservableProperty] private BudgetModel? _model;
@@ -63,16 +75,18 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
         await finance.ApplyDefaultBudgetAsync(current); // one time only (ADR 0020)
         // Every month from the start month to the viewed one has a budget (ADR 0025).
         var start = settings.StartMonth ?? current;
-        if (string.CompareOrdinal(_month, start) >= 0)
-            await finance.FillBudgetMonthsAsync(start, string.CompareOrdinal(_month, current) > 0 ? _month : current);
+        if (string.CompareOrdinal(SelectedMonth, start) >= 0)
+            await finance.FillBudgetMonthsAsync(start, string.CompareOrdinal(SelectedMonth, current) > 0 ? SelectedMonth : current);
 
         var s = _snapshot = await finance.LoadAsync();
-        var plan = s.Plan(_month, settings.ExpectedIncome);
+        var plan = s.Plan(SelectedMonth, settings.ExpectedIncome);
 
         Model = new BudgetModel(
-            MonthTitle: Fmt.Month(_month),
+            MonthTitle: Fmt.Month(SelectedMonth),
             IncomeLabel: Loc.T(plan.IncomeIsExpected ? "Budget_IncomeExpected" : "Budget_Income"),
             Income: Fmt.Money(plan.Income),
+            // "income ৳1,44,500 + borrowed ৳30,000" when something was borrowed (ADR 0033).
+            IncomeParts: plan.Borrowed > 0 ? Loc.F("Budget_IncomeParts", Fmt.Money(plan.Earned), Fmt.Money(plan.Borrowed)) : "",
             Payments: Fmt.Money(plan.DueLines.Sum(l => l.Estimate)),
             BudgetItems: Fmt.Money(plan.BudgetEstimate),
             Planned: Fmt.Money(plan.TotalEstimate),
@@ -86,7 +100,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
                 .OrderByDescending(l => l.InBudget)
                 .ThenBy(l => s.Categories.FirstOrDefault(c => c.Id == l.CategoryId)?.SortOrder ?? int.MaxValue)
                 .Select(l => ItemRow(l, s)).ToList(),
-            _month == MonthKey.Of(today) ? BuildForecast(s, today) : null);
+            SelectedMonth == MonthKey.Of(today) ? BuildForecast(s, today) : null);
     }
 
     /// <summary>Same formula as the sheet: next month's payments + budget vs income (ADR 0015).</summary>
@@ -110,7 +124,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
     private BudgetRow DueRow(BudgetDueLine line, FinanceSnapshot s)
     {
         var dues = s.Dues.Where(d => line.DueIds.Contains(d.Id)).ToList();
-        var payable = string.CompareOrdinal(_month, MonthKey.Of(DateTime.Today)) <= 0 && line.Left > 0;
+        var payable = string.CompareOrdinal(SelectedMonth, MonthKey.Of(DateTime.Today)) <= 0 && line.Left > 0;
         string name, subtitle = "";
         ICommand tap;
 
@@ -120,7 +134,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
             subtitle = Loc.F("Due_CardBreakdown",
                 Fmt.Money(dues.Where(d => d.SourceType == DueSource.Loan).Sum(d => d.Amount)),
                 Fmt.Money(dues.Where(d => d.SourceType == DueSource.Card).Sum(d => d.Amount)));
-            tap = new AsyncRelayCommand(() => payable ? Ui.Go($"{AppShell.Pay}?cardId={card.Id}&month={_month}") : Task.CompletedTask);
+            tap = new AsyncRelayCommand(() => payable ? Ui.Go($"{AppShell.Pay}?cardId={card.Id}&month={SelectedMonth}") : Task.CompletedTask);
         }
         else
         {
@@ -136,6 +150,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
     private BudgetRow ItemRow(BudgetLine line, FinanceSnapshot s)
     {
         var notes = new List<string>();
+        if (line.Skipped) notes.Add(Loc.F("Budget_Skipped", Fmt.Money(line.Planned)));
         notes.Add(Loc.T(!line.InBudget ? "Budget_NotInBudget" : line.OnlyThisMonth ? "Budget_TagOnce" : "Budget_TagEvery"));
         if (line.OnCard > 0) notes.Add(Loc.F("Budget_OnCard", Fmt.Money(line.OnCard)));
 
@@ -146,9 +161,10 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
             line.Left < 0 ? Display.Warn : Display.Negative,
             new AsyncRelayCommand(() => EditLineAsync(line)),
             // Due → the Dues page, scrolled to this item's row (current month only; ADR 0024 note).
-            line.InBudget && line.Left > 0 && string.CompareOrdinal(_month, MonthKey.Of(DateTime.Today)) <= 0
-                ? new AsyncRelayCommand(() => Shell.Current.GoToAsync($"//dues?focus={line.CategoryId}&month={_month}"))
-                : null);
+            line.InBudget && line.Left > 0 && string.CompareOrdinal(SelectedMonth, MonthKey.Of(DateTime.Today)) <= 0
+                ? new AsyncRelayCommand(() => Shell.Current.GoToAsync($"//dues?focus={line.CategoryId}&month={SelectedMonth}"))
+                : null,
+            line.Skipped);
     }
 
     /// <summary>Change amount, switch "every month" / "only this month", or remove (ADR 0019).</summary>
@@ -166,23 +182,29 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
 
         var change = Loc.T("Budget_ChangeEstimate");
         var toggle = Loc.T(line.OnlyThisMonth ? "Budget_MakeEvery" : "Budget_MakeOnce");
+        var skip = Loc.T(line.Skipped ? "Budget_Unskip" : "Budget_Skip");
         var remove = Loc.T("Budget_RemoveFuture");
-        var choice = await Ui.Choose(name, change, toggle, remove);
+        var choice = await Ui.Choose(name, skip, change, toggle, remove);
 
-        if (choice == remove)
+        if (choice == skip)
+        {
+            // Strike through for this month only, or undo (ADR 0031).
+            if (await Ui.Try(() => finance.SetBudgetSkippedAsync(SelectedMonth, line.CategoryId, !line.Skipped))) await LoadAsync();
+        }
+        else if (choice == remove)
         {
             if (await Ui.Confirm(Loc.F("Budget_ConfirmDelete", name))
-                && await Ui.Try(() => finance.RemoveBudgetAsync(_month, line.CategoryId)))
+                && await Ui.Try(() => finance.RemoveBudgetAsync(SelectedMonth, line.CategoryId)))
                 await LoadAsync();
         }
         else if (choice == toggle)
         {
-            if (await Ui.Try(() => finance.SetBudgetAsync(_month, line.CategoryId, line.Estimate, !line.OnlyThisMonth))) await LoadAsync();
+            if (await Ui.Try(() => finance.SetBudgetAsync(SelectedMonth, line.CategoryId, line.Estimate, !line.OnlyThisMonth))) await LoadAsync();
         }
         else if (choice == change)
         {
             var estimate = await Ui.PromptMoney(Loc.F("Budget_EstimateFor", name), line.Estimate);
-            if (estimate is not null && await Ui.Try(() => finance.SetBudgetAsync(_month, line.CategoryId, estimate.Value)))
+            if (estimate is not null && await Ui.Try(() => finance.SetBudgetAsync(SelectedMonth, line.CategoryId, estimate.Value)))
                 await LoadAsync();
         }
     }
@@ -197,7 +219,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
         var repeat = await Ui.Choose(Loc.F("Budget_RepeatQuestion", name), every, Loc.T("Budget_OnlyThisMonth"));
         if (repeat is null) return;
 
-        if (await Ui.Try(() => finance.SetBudgetAsync(_month, categoryId, estimate.Value, onlyThisMonth: repeat != every)))
+        if (await Ui.Try(() => finance.SetBudgetAsync(SelectedMonth, categoryId, estimate.Value, onlyThisMonth: repeat != every)))
             await LoadAsync();
     }
 
@@ -205,7 +227,8 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
     private async Task AddItem()
     {
         if (_snapshot is null) return;
-        var used = _snapshot.Budget.Where(b => b.Month == _month).Select(b => b.CategoryId).ToHashSet();
+        var used = _snapshot.Budget.Where(b => b.Month == SelectedMonth).Select(b => b.CategoryId).ToHashSet();
+        // Every expense category that is not in this month's spending plan yet, in category order (ADR 0027).
         var available = _snapshot.TopCategories(CategoryKind.Expense).Where(c => !used.Contains(c.Id))
             .ToDictionary(c => Display.CategoryName(c.Id, _snapshot), c => c.Id);
 
@@ -221,6 +244,19 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
         {
             var newName = await Ui.PromptText(Loc.T("NewCategory_Prompt"));
             if (newName is null) return;
+
+            // No duplicates (ADR 0027): an existing category is used, or refused if already planned.
+            if (_snapshot.FindCategory(newName, CategoryKind.Expense) is { } existingCategory)
+            {
+                if (existingCategory.ParentId is not null)
+                    await Ui.Alert(Display.CategoryExists(existingCategory, _snapshot));
+                else if (used.Contains(existingCategory.Id))
+                    await Ui.Alert(Loc.F("Budget_AlreadyInPlan", Display.CategoryName(existingCategory.Id, _snapshot)));
+                else
+                    await AskEstimateAndRepeatAsync(existingCategory.Id, Display.CategoryName(existingCategory.Id, _snapshot), null);
+                return;
+            }
+
             Category? created = null;
             if (!await Ui.Try(async () => created = await finance.AddCategoryAsync(newName, CategoryKind.Expense, null))) return;
             categoryId = created!.Id;
@@ -233,14 +269,14 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
     [RelayCommand]
     private Task Previous()
     {
-        _month = MonthKey.Add(_month, -1);
+        SelectedMonth = MonthKey.Add(SelectedMonth, -1);
         return LoadAsync();
     }
 
     [RelayCommand]
     private Task Next()
     {
-        _month = MonthKey.Add(_month, 1);
+        SelectedMonth = MonthKey.Add(SelectedMonth, 1);
         return LoadAsync();
     }
 }

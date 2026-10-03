@@ -8,7 +8,12 @@ namespace DailyAccount.Core.Services;
 /// OnCard = card purchases this month: shown for information only, because they are paid next month
 /// through the card payment line (that's how the sheet works, and it avoids counting them twice).
 /// </summary>
-public sealed record BudgetLine(int CategoryId, long Estimate, long Spent, long OnCard, bool InBudget, bool OnlyThisMonth = false)
+/// <remarks>
+/// <paramref name="Skipped"/> = "won't pay this month" (ADR 0031): <paramref name="Estimate"/> is then only what
+/// was spent (nothing left to pay) and <paramref name="Planned"/> keeps the estimate that was set.
+/// </remarks>
+public sealed record BudgetLine(int CategoryId, long Estimate, long Spent, long OnCard, bool InBudget, bool OnlyThisMonth = false,
+    bool Skipped = false, long Planned = 0)
 {
     public long Left => Estimate - Spent;
 }
@@ -20,13 +25,19 @@ public sealed record BudgetDueLine(DueSource Source, int SourceId, long Estimate
     public long Left => Estimate - Paid;
 }
 
+/// <param name="Income">Money the month has to spend (ADR 0033): income (or the expected income) plus
+/// <paramref name="Borrowed"/> — money borrowed or returned to you this month — as in the sheet.</param>
 public sealed record BudgetPlan(
     string Month,
     long Income,
     bool IncomeIsExpected,
     List<BudgetDueLine> DueLines,
-    List<BudgetLine> Lines)
+    List<BudgetLine> Lines,
+    long Borrowed = 0)
 {
+    /// <summary>Income without the borrowed part (salary, bonus…).</summary>
+    public long Earned => Income - Borrowed;
+
     public long TotalEstimate => DueLines.Sum(d => d.Estimate) + Lines.Sum(l => l.Estimate);
     public long TotalSpent => DueLines.Sum(d => d.Paid) + Lines.Sum(l => l.Spent);
     public long TotalLeft => TotalEstimate - TotalSpent;
@@ -62,6 +73,8 @@ public static class BudgetService
     {
         var inMonth = transactions.Where(t => MonthKey.Contains(month, t.Date)).ToList();
         var actualIncome = inMonth.Where(t => t.Type == TransactionType.Income).Sum(t => t.Amount);
+        // Borrowed money (and lent money returned) is money to spend this month too (ADR 0033).
+        var borrowed = inMonth.Where(t => t.Type is TransactionType.BorrowIn or TransactionType.LendReturn).Sum(t => t.Amount);
 
         // Map every category to its top-level parent; uncategorized → 0.
         var topOf = categories.ToDictionary(c => c.Id, c => c.ParentId ?? c.Id);
@@ -74,7 +87,12 @@ public static class BudgetService
 
         var monthBudget = budget.Where(b => b.Month == month).ToList();
         var lines = monthBudget
-            .Select(b => new BudgetLine(b.CategoryId, b.Estimate, spent.GetValueOrDefault(b.CategoryId), onCard.GetValueOrDefault(b.CategoryId), true, b.OnlyThisMonth))
+            .Select(b =>
+            {
+                var paid = spent.GetValueOrDefault(b.CategoryId);
+                return new BudgetLine(b.CategoryId, b.Skipped ? Math.Min(b.Estimate, paid) : b.Estimate, paid,
+                    onCard.GetValueOrDefault(b.CategoryId), true, b.OnlyThisMonth, b.Skipped, b.Estimate);
+            })
             .ToList();
 
         // Spending in categories that have no budget line still shows up (estimate 0), so totals are honest.
@@ -85,10 +103,11 @@ public static class BudgetService
 
         return new BudgetPlan(
             month,
-            actualIncome > 0 ? actualIncome : expectedIncome,
+            (actualIncome > 0 ? actualIncome : expectedIncome) + borrowed,
             actualIncome == 0 && expectedIncome > 0,
             DueLinesFor(month, dues, loans),
-            lines);
+            lines,
+            borrowed);
     }
 
     /// <summary>

@@ -44,6 +44,7 @@ public static class Display
     public static Color Positive => Color.FromArgb("#1E6B4A");
     public static Color Negative => Color.FromArgb("#16201A");
     public static Color Warn => Color.FromArgb("#B4441A");
+    public static Color Muted => Color.FromArgb("#5B6660");
 
     public static string DueTitle(Due due, FinanceSnapshot s) => due.SourceType switch
     {
@@ -140,6 +141,31 @@ public static class Display
         s.Categories.FirstOrDefault(c => c.Id == categoryId) is { } c
             ? (Loc.IsBangla && !string.IsNullOrEmpty(c.NameBn) ? c.NameBn : c.Name)
             : Loc.T("Uncategorized");
+
+    /// <summary>Why a new name was refused (ADR 0027): "\"Fish\" already exists under Bajar." / "... as a category."</summary>
+    public static string CategoryExists(Category existing, FinanceSnapshot s) => existing.ParentId is { } parent
+        ? Loc.F("Category_ExistsUnder", CategoryName(existing.Id, s), CategoryName(parent, s))
+        : Loc.F("Category_ExistsTop", CategoryName(existing.Id, s));
+
+    /// <summary>
+    /// Months borrowed money can be paid back in (ADR 0030): "Not decided yet", then the month it was
+    /// borrowed and the 24 after it. Value = month key, or null for none.
+    /// </summary>
+    public static Dictionary<string, string?> PayMonthOptions(DateTime borrowed)
+    {
+        var first = Core.MonthKey.Of(borrowed);
+        var options = new Dictionary<string, string?> { [Loc.T("Debt_NoPayMonth")] = null };
+        for (var i = 0; i <= 24; i++)
+        {
+            var m = Core.MonthKey.Add(first, i);
+            options[Fmt.Month(m)] = m;
+        }
+        return options;
+    }
+
+    /// <summary>"October 2026" → "2026-10" for the month of <paramref name="from"/> and the 24 after it.</summary>
+    public static Dictionary<string, string> MonthOptions(DateTime from) =>
+        PayMonthOptions(from).Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value!);
 
     public static string AccountName(int? accountId, FinanceSnapshot s) =>
         s.Accounts.FirstOrDefault(a => a.Id == accountId)?.Name ?? "";

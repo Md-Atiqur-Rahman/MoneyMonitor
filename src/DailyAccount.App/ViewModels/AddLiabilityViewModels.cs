@@ -12,10 +12,49 @@ namespace DailyAccount.App.ViewModels;
 /// <summary>
 /// New loan. Can be a card EMI (billed on a credit card) and can already be partly paid:
 /// the user gives the next installment to pay and how many were paid before (ADR 0012).
+/// ADR 0034: or a loan without installments (one amount in a pay month, can become EMI later); and the
+/// money received now goes into an account on a date, so it counts in that month's income.
 /// </summary>
-public sealed partial class AddLoanViewModel(FinanceService finance) : ViewModelBase
+public sealed partial class AddLoanViewModel : ViewModelBase
 {
+    private readonly FinanceService finance;
     private FinanceSnapshot? _snapshot;
+
+    public AddLoanViewModel(FinanceService finance)
+    {
+        this.finance = finance;
+        Kinds =
+        [
+            new("emi", Loc.T("LoanKind_Emi"), SelectKind),
+            new("one", Loc.T("LoanKind_One"), SelectKind),
+        ];
+        SelectKind(Kinds[0]);
+        var months = Display.MonthOptions(DateTime.Today);
+        _payMonthKeys = [.. months.Values];
+        PayMonths = months.Keys.Select((label, i) => new Option(i, label)).ToList();
+        SelectedPayMonth = PayMonths.ElementAtOrDefault(1); // next month by default
+    }
+
+    public List<ChipOption> Kinds { get; }
+    [ObservableProperty] private bool _noInstallments;
+    public bool WithInstallments => !NoInstallments;
+    partial void OnNoInstallmentsChanged(bool value) => OnPropertyChanged(nameof(WithInstallments));
+
+    private void SelectKind(ChipOption option)
+    {
+        foreach (var k in Kinds) k.IsSelected = k == option;
+        NoInstallments = option.Key == "one";
+    }
+
+    /// <summary>Without installments: the month it is to be paid (on that month's card bill).</summary>
+    [ObservableProperty] private List<Option> _payMonths = [];
+    [ObservableProperty] private Option? _selectedPayMonth;
+    private readonly List<string> _payMonthKeys;
+
+    /// <summary>Money received now (ADR 0034). Off for a loan that was running before ("money came earlier").</summary>
+    [ObservableProperty] private bool _moneyReceived = true;
+    [ObservableProperty] private Option? _receivedIn;
+    [ObservableProperty] private DateTime _receivedOn = DateTime.Today;
 
     [ObservableProperty] private string _lender = "";
     [ObservableProperty] private string _totalText = "";
@@ -33,6 +72,7 @@ public sealed partial class AddLoanViewModel(FinanceService finance) : ViewModel
         var s = _snapshot = await finance.LoadAsync();
         Accounts = Display.AccountOptions(s);
         PayFrom ??= Accounts.FirstOrDefault();
+        ReceivedIn ??= Accounts.FirstOrDefault();
         Cards = [new Option(0, Loc.T("None")), .. s.Cards.Select(c => new Option(c.Id, c.Name))];
 
         // Defaults (user request): the first credit card instead of "None", and the next installment
@@ -69,19 +109,22 @@ public sealed partial class AddLoanViewModel(FinanceService finance) : ViewModel
         var paidBefore = Fmt.ParseInt(PaidBeforeText) ?? 0;
         var card = SelectedCard is { Id: > 0 } c ? _snapshot?.Cards.FirstOrDefault(x => x.Id == c.Id) : null;
 
+        if (NoInstallments) paidBefore = 0;
+        var payMonth = SelectedPayMonth is { } pm ? _payMonthKeys[pm.Id] : MonthKey.Of(DateTime.Today);
         var ok = await Ui.Try(() => finance.AddLoanAsync(new Loan
         {
             Lender = Lender,
             Principal = total,
             TotalPayable = total,
-            InstallmentCount = Fmt.ParseInt(InstallmentsText) ?? 0,
+            NoInstallments = NoInstallments,
+            InstallmentCount = NoInstallments ? 1 : Fmt.ParseInt(InstallmentsText) ?? 0,
             InstallmentsPaidBefore = paidBefore,
             // The next installment is number (paidBefore + 1), so the schedule starts paidBefore months earlier.
-            StartMonth = MonthKey.Add(MonthKey.Of(NextDate), -paidBefore),
+            StartMonth = NoInstallments ? payMonth : MonthKey.Add(MonthKey.Of(NextDate), -paidBefore),
             DueDay = card?.DueDay ?? NextDate.Day,
             CardId = card?.Id,
             PayFromAccountId = card?.PayFromAccountId ?? PayFrom?.Id
-        }));
+        }, MoneyReceived ? ReceivedIn?.Id : null, ReceivedOn));
         if (ok) await Ui.Back();
     }
 }

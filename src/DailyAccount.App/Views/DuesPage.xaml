@@ -19,10 +19,29 @@
                         <Setter Property="BackgroundColor" Value="{StaticResource InfoTint}" />
                     </DataTrigger>
                 </Grid.Triggers>
-                <Label Text="{Binding Name}" FontAttributes="Bold" VerticalOptions="Center" />
+                <Label Text="{Binding Name}" FontAttributes="Bold" VerticalOptions="Center">
+                    <Label.Triggers>
+                        <!-- "Won't pay this month" (ADR 0031) -->
+                        <DataTrigger TargetType="Label" Binding="{Binding Struck}" Value="True">
+                            <Setter Property="TextDecorations" Value="Strikethrough" />
+                            <Setter Property="Opacity" Value="0.55" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
                 <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" VerticalOptions="Center" />
-                <Label Grid.Column="1" Text="{Binding Amount}" TextColor="{Binding AmountColor}" Style="{StaticResource Amount}" HorizontalOptions="End" VerticalOptions="Center" />
-                <Button Grid.Column="1" Grid.Row="1" Text="{Binding ActionText}" Command="{Binding Action}" IsVisible="{Binding HasAction}" Style="{StaticResource SmallOutline}" HorizontalOptions="End" />
+                <Label Grid.Column="1" Text="{Binding Amount}" TextColor="{Binding AmountColor}" Style="{StaticResource Amount}" HorizontalOptions="End" VerticalOptions="Center">
+                    <Label.Triggers>
+                        <!-- "Won't pay this month" (ADR 0031) -->
+                        <DataTrigger TargetType="Label" Binding="{Binding Struck}" Value="True">
+                            <Setter Property="TextDecorations" Value="Strikethrough" />
+                            <Setter Property="Opacity" Value="0.55" />
+                        </DataTrigger>
+                    </Label.Triggers>
+                </Label>
+                <HorizontalStackLayout Grid.Column="1" Grid.Row="1" Spacing="6" HorizontalOptions="End">
+                    <Button Text="{Binding SecondText}" Command="{Binding Second}" IsVisible="{Binding HasSecond}" Style="{StaticResource SmallOutline}" />
+                    <Button Text="{Binding ActionText}" Command="{Binding Action}" IsVisible="{Binding HasAction}" Style="{StaticResource SmallOutline}" />
+                </HorizontalStackLayout>
             </Grid>
         </DataTemplate>
     </ContentPage.Resources>
@@ -66,6 +85,12 @@
             <Label Text="{loc:Tr Dues_FullyPaid}" Style="{StaticResource Caption}" Margin="0,6,0,0" IsVisible="{Binding Model.HasFullyPaid}" />
             <Border Style="{StaticResource Card}" Padding="16,4" IsVisible="{Binding Model.HasFullyPaid}">
                 <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.FullyPaid}" BindableLayout.ItemTemplate="{StaticResource BudgetDueTemplate}" />
+            </Border>
+
+            <!-- Struck through: won't pay this month, not in the Due (ADR 0031) -->
+            <Label Text="{loc:Tr Dues_SkippedTitle}" Style="{StaticResource Caption}" Margin="0,6,0,0" IsVisible="{Binding Model.HasSkipped}" />
+            <Border Style="{StaticResource Card}" Padding="16,4" IsVisible="{Binding Model.HasSkipped}">
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.Skipped}" BindableLayout.ItemTemplate="{StaticResource BudgetDueTemplate}" />
             </Border>
 
             <!-- ===== Card & loan payments: separate, not in the Due above ===== -->

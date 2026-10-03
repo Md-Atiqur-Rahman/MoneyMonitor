@@ -45,6 +45,10 @@ public static class Fmt
             : null;
     }
 
+    /// <summary>A plain number such as a quantity ("1.5", "২"); null when empty or invalid.</summary>
+    public static decimal? ParseNumber(string? text) =>
+        decimal.TryParse(Normalize(text), NumberStyles.Number, CultureInfo.InvariantCulture, out var n) ? n : null;
+
     public static int? ParseInt(string? text) =>
         int.TryParse(Normalize(text), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : null;
 

@@ -18,6 +18,7 @@ public static class MauiProgram
         builder.Services.AddSingleton(_ => new FinanceDatabase(Path.Combine(FileSystem.AppDataDirectory, "dailyaccount.db3")));
         builder.Services.AddSingleton<FinanceService>();
         builder.Services.AddSingleton<AppSettings>();
+        builder.Services.AddSingleton<MonthState>();
         builder.Services.AddSingleton<BackupService>();
 
         // Screens: a fresh page + view model each time one is opened.
@@ -36,6 +37,7 @@ public static class MauiProgram
         AddScreen<CategoriesPage, CategoriesViewModel>(builder.Services);
         AddScreen<CategoryReportPage, CategoryReportViewModel>(builder.Services);
         AddScreen<EntriesPage, EntriesViewModel>(builder.Services);
+        AddScreen<FlowPage, FlowViewModel>(builder.Services);
         AddScreen<SettingsPage, SettingsViewModel>(builder.Services);
 
 #if DEBUG

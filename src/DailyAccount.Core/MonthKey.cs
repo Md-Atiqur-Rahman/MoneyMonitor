@@ -14,6 +14,15 @@ public static class MonthKey
 
     public static bool Contains(string key, DateTime date) => Of(date) == key;
 
+    public static DateTime LastDay(string key) => FirstDay(key).AddMonths(1).AddDays(-1);
+
+    /// <summary>
+    /// The day a month is looked at (ADR 0029): an earlier month as it stood on its last day; this month
+    /// and later months as of today.
+    /// </summary>
+    public static DateTime AsOf(string key, DateTime today) =>
+        string.CompareOrdinal(key, Of(today)) < 0 ? LastDay(key) : today;
+
     /// <summary>The given day in that month, clamped to the month's last day (e.g. 31 → 30 Sep).</summary>
     public static DateTime DayIn(string key, int day)
     {

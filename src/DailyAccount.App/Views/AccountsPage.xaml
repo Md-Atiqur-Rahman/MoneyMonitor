@@ -16,9 +16,24 @@
                 <Button Grid.Column="1" Text="{loc:Tr AddAccount}" Command="{Binding AddCommand}" Style="{StaticResource SmallOutline}" />
             </Grid>
 
+            <!-- ‹ month › shared by every page (ADR 0029) -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <ImageButton Source="chevron_left.png" Command="{Binding PreviousMonthCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
+                <Label Grid.Column="1" Text="{Binding MonthTitle}" FontSize="20" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
+                <ImageButton Grid.Column="2" Source="chevron_right.png" Command="{Binding NextMonthCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
+                             BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Next month" />
+            </Grid>
+            <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource InfoTint}" IsVisible="{Binding IsPastMonth}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Text="{loc:Tr Home_PastMonthNote}" TextColor="{StaticResource Info}" FontSize="14" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="{loc:Tr Home_BackToThisMonth}" Command="{Binding ThisMonthCommand}" Style="{StaticResource SmallOutline}" />
+                </Grid>
+            </Border>
+
             <Border BackgroundColor="{StaticResource Ink}" StrokeThickness="0" StrokeShape="RoundRectangle 20" Padding="20">
                 <VerticalStackLayout Spacing="4">
-                    <Label Text="{loc:Tr TotalSavings}" TextColor="#C9D0CB" FontSize="13" />
+                    <Label Text="{Binding TotalTitle}" TextColor="#C9D0CB" FontSize="13" />
                     <Label Text="{Binding Total}" TextColor="White" FontSize="32" FontAttributes="Bold" />
                 </VerticalStackLayout>
             </Border>

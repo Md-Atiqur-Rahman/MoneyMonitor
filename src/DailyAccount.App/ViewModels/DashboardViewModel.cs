@@ -17,6 +17,13 @@ public sealed record CardStatusRow(string Name, string Amount, string Status, Co
 
 public sealed record DashboardModel(
     string MonthTitle,
+    bool IsCurrentMonth,
+    bool CanGoNext,
+    string BankTitle,
+    string SavingsTitle,
+    string BudgetTitle,
+    string PrevCardLabel,
+    string PrevCarriedLabel,
     string Savings,
     bool SavingsIsNegative,
     string SavingsSub,
@@ -50,8 +57,11 @@ public sealed record DashboardModel(
 /// Home: five numbers, each opening its details page (ADR 0018) — savings, expenses, dues,
 /// credit-card payment status and the money in all accounts. Income is deliberately not shown.
 /// </summary>
-public sealed partial class DashboardViewModel(FinanceService finance, AppSettings settings) : ViewModelBase
+public sealed partial class DashboardViewModel(FinanceService finance, AppSettings settings, MonthState months) : ViewModelBase
 {
+    /// <summary>The month shown (ADR 0028), shared by every page (ADR 0029).</summary>
+    private string SelectedMonth { get => months.Month; set => months.Month = value; }
+
     private static readonly Color GreenBg = Color.FromArgb("#E3F0E8"), GreenFg = Color.FromArgb("#14503A");
     private static readonly Color OrangeBg = Color.FromArgb("#FBE9E1"), OrangeFg = Color.FromArgb("#8F3313");
     private static readonly Color RedBg = Color.FromArgb("#B4441A"), RedFg = Colors.White;
@@ -63,15 +73,24 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
     public override async Task LoadAsync()
     {
         var today = DateTime.Today;
-        var month = MonthKey.Of(today);
+        var current = MonthKey.Of(today);
         await finance.GenerateDuesAsync(today);
-        await finance.ApplyDefaultBudgetAsync(month); // one time only (ADR 0020)
-        await finance.FillBudgetMonthsAsync(settings.StartMonth ?? month, month); // ADR 0025
+        await finance.ApplyDefaultBudgetAsync(current); // one time only (ADR 0020)
+        await finance.FillBudgetMonthsAsync(settings.StartMonth ?? current, current); // ADR 0025
         var s = await finance.LoadAsync();
 
+        // An earlier month is shown as it stood at its end (ADR 0028): balance on its last day,
+        // its own plan, and the forecast it gave for the month after it.
+        // Home shows no future month: coming here from a later month (Budget/Dues) means this month everywhere.
+        if (string.CompareOrdinal(SelectedMonth, current) > 0) SelectedMonth = current;
+        var month = SelectedMonth;
+        var isCurrent = month == current;
+        var lastDay = MonthKey.FirstDay(month).AddMonths(1).AddDays(-1);
+        var asOf = isCurrent ? today : lastDay;
+
         var plan = s.Plan(month, settings.ExpectedIncome);
-        var prev = s.Carry(MonthKey.Add(month, -1)); // what last month left for this one (ADR 0025)
-        var (next, _, _) = s.NextMonthPlan(today, settings.ExpectedIncome);
+        var prev = s.Carry(MonthKey.Add(month, -1)); // what the month before left for this one (ADR 0025)
+        var (next, _, _) = s.NextMonthPlan(asOf, settings.ExpectedIncome);
         var sum = s.Summary(month);
 
         // Due = unpaid budget items + unpaid non-card dues; the same Core calculation as the Dues page (ADR 0024).
@@ -84,8 +103,16 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
 
         var accounts = s.Accounts.Where(a => a.IsActive).ToList();
 
+        var monthName = Fmt.MonthName(month);
         Model = new DashboardModel(
             MonthTitle: Fmt.Month(month),
+            IsCurrentMonth: isCurrent,
+            CanGoNext: !isCurrent,
+            BankTitle: isCurrent ? Loc.T("Home_Accounts") : Loc.F("Home_AccountsOn", Fmt.Date(lastDay)),
+            SavingsTitle: isCurrent ? Loc.T("Home_Savings") : Loc.F("Home_SavingsIn", monthName),
+            BudgetTitle: isCurrent ? Loc.T("Home_Budget") : Loc.F("Home_BudgetIn", monthName),
+            PrevCardLabel: Loc.F("Home_PrevCardIn", monthName),
+            PrevCarriedLabel: Loc.F("Home_PrevCarriedIn", monthName),
             Savings: Fmt.Money(plan.Save),
             SavingsIsNegative: plan.Save < 0,
             SavingsSub: plan.Save < 0
@@ -107,15 +134,15 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
             PrevCard: Fmt.Money(prev.CardToNextBill),
             PrevCarried: Fmt.Money(prev.CarriedDues),
             // Shown from the start month on, or whenever last month has any activity.
-            HasPrev: string.CompareOrdinal(prev.Month, settings.StartMonth ?? month) >= 0
+            HasPrev: string.CompareOrdinal(prev.Month, settings.StartMonth ?? current) >= 0
                      || prev.Income + prev.CashExpenses + prev.BillsPaid + prev.CardToNextBill + prev.CarriedDues > 0,
             Expenses: Fmt.Money(sum.TotalSpending),
             ExpensesSub: Loc.F("CatReport_CashCard", Fmt.Money(sum.CashExpenses), Fmt.Money(sum.CardSpending)),
             Due: Fmt.Money(s.MonthDue(month, settings.ExpectedIncome)),
             DueSub: dueSub,
             Cards: s.Cards.Select(c => CardStatus(c, s, today, month)).ToList(),
-            BankTotal: Fmt.Money(s.TotalBalance),
-            BankSub: string.Join(" · ", accounts.Select(a => $"{a.Name} {Fmt.Money(s.Balance(a))}")),
+            BankTotal: Fmt.Money(s.TotalBalanceOn(asOf)),
+            BankSub: string.Join(" · ", accounts.Select(a => $"{a.Name} {Fmt.Money(s.BalanceOn(a, asOf))}")),
             HasNoAccounts: accounts.Count == 0);
     }
 
@@ -143,12 +170,55 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
         return new CardStatusRow(card.Name, Fmt.Money(remaining), Loc.F("Home_CardPending", Fmt.DayMonth(dueDate)), OrangeBg, OrangeFg, breakdown);
     }
 
-    [RelayCommand] private Task AddTransaction() => Ui.Go(AppShell.AddTransaction);
+    // Every card opens its page for the month shown (ADR 0028).
+    private bool IsPast => months.IsPast;
+
+    /// <summary>In an earlier month a new entry is dated on that month's last day (it can be changed).</summary>
+    [RelayCommand]
+    private Task AddTransaction() => Ui.Go(IsPast
+        ? $"{AppShell.AddTransaction}?date={MonthKey.FirstDay(SelectedMonth).AddMonths(1).AddDays(-1):yyyy-MM-dd}"
+        : AppShell.AddTransaction);
+
     [RelayCommand] private Task AddAccount() => Ui.Go(AppShell.AddAccount);
     [RelayCommand] private Task OpenSettings() => Ui.Go(AppShell.Settings);
-    [RelayCommand] private Task OpenReports() => Ui.Go(AppShell.Reports);
-    [RelayCommand] private Task OpenBudget() => Shell.Current.GoToAsync("//budget");
-    [RelayCommand] private Task OpenDues() => Shell.Current.GoToAsync("//dues");
-    [RelayCommand] private Task OpenPrevDues() => Shell.Current.GoToAsync($"//dues?month={MonthKey.Add(MonthKey.Of(DateTime.Today), -1)}");
+    [RelayCommand] private Task OpenReports() => Ui.Go($"{AppShell.Reports}?month={SelectedMonth}");
+    [RelayCommand] private Task OpenBudget() => Shell.Current.GoToAsync($"//budget?month={SelectedMonth}");
+    [RelayCommand] private Task OpenDues() => Shell.Current.GoToAsync($"//dues?month={SelectedMonth}");
+    [RelayCommand] private Task OpenPrevDues() => Shell.Current.GoToAsync($"//dues?month={MonthKey.Add(SelectedMonth, -1)}");
     [RelayCommand] private Task OpenAccounts() => Shell.Current.GoToAsync("//accounts");
+
+    [RelayCommand]
+    private Task PreviousMonth()
+    {
+        SelectedMonth = MonthKey.Add(SelectedMonth, -1);
+        return LoadAsync();
+    }
+
+    [RelayCommand]
+    private Task NextMonth()
+    {
+        if (!IsPast) return Task.CompletedTask; // no future months on Home
+        SelectedMonth = MonthKey.Add(SelectedMonth, 1);
+        return LoadAsync();
+    }
+
+    /// <summary>Tap on the month: pick any month with data, newest first (e.g. last January).</summary>
+    [RelayCommand]
+    private async Task ChooseMonth()
+    {
+        var s = await finance.LoadAsync();
+        var months = s.MonthsUpTo(MonthKey.Of(DateTime.Today), settings.StartMonth);
+        var labels = months.ToDictionary(Fmt.Month, m => m);
+        var choice = await Ui.Choose(Loc.T("Home_ChooseMonth"), [.. labels.Keys]);
+        if (choice is null || !labels.TryGetValue(choice, out var month)) return;
+        SelectedMonth = month;
+        await LoadAsync();
+    }
+
+    [RelayCommand]
+    private Task ThisMonth()
+    {
+        months.Reset();
+        return LoadAsync();
+    }
 }

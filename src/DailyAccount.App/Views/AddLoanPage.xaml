@@ -13,6 +13,24 @@
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="16">
 
+            <!-- With installments (EMI) / without installments: one amount (ADR 0034) -->
+            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Kinds}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ChipOption">
+                        <Button Text="{Binding Label}" Command="{Binding SelectCommand}" Style="{StaticResource Chip}">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button" Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{StaticResource Ink}" />
+                                    <Setter Property="TextColor" Value="White" />
+                                    <Setter Property="BorderColor" Value="{StaticResource Ink}" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </FlexLayout>
+            <Label Text="{loc:Tr LoanKind_OneHint}" Style="{StaticResource Muted}" IsVisible="{Binding NoInstallments}" />
+
             <VerticalStackLayout Spacing="6">
                 <Label Text="{loc:Tr Lender}" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}">
@@ -34,7 +52,7 @@
                 </Border>
             </VerticalStackLayout>
 
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding WithInstallments}">
                 <VerticalStackLayout Spacing="6">
                     <Label Text="{loc:Tr Installments}" Style="{StaticResource Caption}" />
                     <Border Style="{StaticResource Field}">
@@ -49,7 +67,7 @@
                 </VerticalStackLayout>
             </Grid>
 
-            <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource InfoTint}">
+            <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource InfoTint}" IsVisible="{Binding WithInstallments}">
                 <Border.Triggers>
                     <DataTrigger TargetType="Border" Binding="{Binding Preview}" Value="">
                         <Setter Property="IsVisible" Value="False" />
@@ -58,11 +76,35 @@
                 <Label Text="{Binding Preview}" TextColor="{StaticResource Info}" FontAttributes="Bold" />
             </Border>
 
-            <VerticalStackLayout Spacing="6">
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding WithInstallments}">
                 <Label Text="{loc:Tr NextInstallment}" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}">
                     <DatePicker Date="{Binding NextDate}" Format="d MMM yyyy" />
                 </Border>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding NoInstallments}">
+                <Label Text="{loc:Tr LoanPayMonth}" Style="{StaticResource Caption}" />
+                <Border Style="{StaticResource Field}">
+                    <Picker ItemsSource="{Binding PayMonths}" SelectedItem="{Binding SelectedPayMonth}" />
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- Money received now → that month's income (ADR 0034) -->
+            <VerticalStackLayout Spacing="6">
+                <Grid ColumnDefinitions="*,Auto">
+                    <Label Text="{loc:Tr LoanMoneyReceived}" VerticalOptions="Center" />
+                    <Switch Grid.Column="1" IsToggled="{Binding MoneyReceived}" />
+                </Grid>
+                <Label Text="{loc:Tr LoanMoneyReceivedHint}" Style="{StaticResource Muted}" />
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding MoneyReceived}">
+                    <Border Style="{StaticResource Field}">
+                        <Picker ItemsSource="{Binding Accounts}" SelectedItem="{Binding ReceivedIn}" Title="{loc:Tr LoanReceivedIn}" />
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource Field}">
+                        <DatePicker Date="{Binding ReceivedOn}" Format="d MMM yyyy" />
+                    </Border>
+                </Grid>
             </VerticalStackLayout>
 
             <VerticalStackLayout Spacing="6">

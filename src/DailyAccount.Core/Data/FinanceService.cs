@@ -229,10 +229,19 @@ public sealed class FinanceService(FinanceDatabase database)
 
     // ---------- Loans ----------
 
-    /// <summary>Saves the loan and its full installment schedule in one go.</summary>
-    public async Task<Loan> AddLoanAsync(Loan loan)
+    /// <summary>
+    /// Saves the loan and its full installment schedule in one go. A loan without installments is one amount
+    /// due in its start month (ADR 0034). With <paramref name="receivedIn"/> the money came in now: it is added to
+    /// that account on <paramref name="receivedOn"/> as borrowed money, so it counts in that month's income.
+    /// </summary>
+    public async Task<Loan> AddLoanAsync(Loan loan, int? receivedIn = null, DateTime? receivedOn = null)
     {
         await database.InitAsync();
+        if (loan.NoInstallments)
+        {
+            loan.InstallmentCount = 1;
+            loan.InstallmentsPaidBefore = 0;
+        }
         if (string.IsNullOrWhiteSpace(loan.Lender)) throw new FinanceException("Err_Name");
         if (loan.TotalPayable <= 0) throw new FinanceException("Err_Amount");
         if (loan.InstallmentCount is < 1 or > 600) throw new FinanceException("Err_Installments");
@@ -245,8 +254,77 @@ public sealed class FinanceService(FinanceDatabase database)
         {
             c.Insert(loan);
             c.InsertAll(LiabilityEngine.BuildLoanSchedule(loan));
+            if (receivedIn is not null)
+                c.Insert(new Transaction
+                {
+                    Type = TransactionType.BorrowIn, AccountId = receivedIn, LoanId = loan.Id, Amount = loan.Principal,
+                    Date = receivedOn ?? DateTime.Today, Note = loan.Lender
+                });
         });
         return loan;
+    }
+
+    /// <summary>
+    /// Moves what is still unpaid of a loan to start in <paramref name="month"/> (ADR 0034): a loan without
+    /// installments gets that pay month; an EMI's unpaid installments follow monthly from it.
+    /// </summary>
+    public async Task MoveLoanAsync(int loanId, string month)
+    {
+        var s = await LoadAsync();
+        var loan = s.Loans.FirstOrDefault(l => l.Id == loanId) ?? throw new FinanceException("Err_NotFound");
+        var open = s.Dues.Where(d => d.SourceType == DueSource.Loan && d.SourceId == loanId && d.PaidAmount == 0)
+            .OrderBy(d => d.Sequence).ToList();
+        if (open.Count == 0) throw new FinanceException("Err_LoanNothingOpen");
+
+        for (var i = 0; i < open.Count; i++)
+        {
+            open[i].DueMonth = MonthKey.Add(month, i);
+            open[i].DueDate = MonthKey.DayIn(open[i].DueMonth, loan.DueDay);
+        }
+        if (open[0].Sequence == 1) loan.StartMonth = month;
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var d in open) c.Update(d);
+            c.Update(loan);
+        });
+    }
+
+    /// <summary>
+    /// Turns a loan without installments into EMI (ADR 0034): <paramref name="total"/> (what is unpaid, or more
+    /// with the bank's interest) in <paramref name="count"/> installments from <paramref name="month"/>.
+    /// Whatever was already paid stays as paid.
+    /// </summary>
+    public async Task ConvertLoanToEmiAsync(int loanId, long total, int count, string month)
+    {
+        var s = await LoadAsync();
+        var loan = s.Loans.FirstOrDefault(l => l.Id == loanId) ?? throw new FinanceException("Err_NotFound");
+        if (!loan.NoInstallments) throw new FinanceException("Err_AlreadyEmi");
+        if (total <= 0) throw new FinanceException("Err_Amount");
+        if (count is < 1 or > 600) throw new FinanceException("Err_Installments");
+
+        var dues = s.Dues.Where(d => d.SourceType == DueSource.Loan && d.SourceId == loanId).ToList();
+        var paid = dues.Sum(d => d.PaidAmount);
+        if (dues.All(d => d.Status == DueStatus.Paid)) throw new FinanceException("Err_LoanNothingOpen");
+
+        loan.NoInstallments = false;
+        loan.TotalPayable = paid + total;
+        loan.InstallmentCount = count + (paid > 0 ? 1 : 0);
+        loan.StartMonth = month;
+        var installments = LiabilityEngine.BuildInstallments(loan, paid > 0 ? 2 : 1, month, total, count);
+
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var d in dues)
+            {
+                if (d.PaidAmount == 0) { c.Delete(d); continue; }
+                // A part already paid stays as installment 1, closed at what was paid.
+                d.Amount = d.PaidAmount;
+                d.Status = DueStatus.Paid;
+                c.Update(d);
+            }
+            c.InsertAll(installments);
+            c.Update(loan);
+        });
     }
 
     /// <summary>Removes a loan only if no payment was made in the app (to fix a typo).</summary>
@@ -256,9 +334,11 @@ public sealed class FinanceService(FinanceDatabase database)
         var dues = s.Dues.Where(d => d.SourceType == DueSource.Loan && d.SourceId == loanId).ToList();
         var dueIds = dues.Select(d => d.Id).ToHashSet();
         if (s.Transactions.Any(t => t.DueId is { } id && dueIds.Contains(id))) throw new FinanceException("Err_LoanHasPayments");
+        var received = s.Transactions.Where(t => t.Type == TransactionType.BorrowIn && t.LoanId == loanId).ToList();
         await Db.RunInTransactionAsync(c =>
         {
             foreach (var d in dues) c.Delete(d);
+            foreach (var t in received) c.Delete(t); // the money it brought in goes with it (ADR 0034)
             c.Delete<Loan>(loanId);
         });
     }
@@ -332,8 +412,8 @@ public sealed class FinanceService(FinanceDatabase database)
             if (parent.ParentId is not null) throw new FinanceException("Err_SubOfSub");
             kind = parent.Kind;
         }
-        if (s.Categories.Any(c => c.ParentId == parentId && c.Kind == kind && string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)))
-            throw new FinanceException("Err_CategoryExists");
+        // Unique per kind across all levels (ADR 0027): no "Fish" under both Bajar and Others.
+        if (s.FindCategory(name, kind) is not null) throw new FinanceException("Err_CategoryExists");
 
         var category = new Category
         {
@@ -349,6 +429,9 @@ public sealed class FinanceService(FinanceDatabase database)
         await database.InitAsync();
         if (string.IsNullOrWhiteSpace(name)) throw new FinanceException("Err_Name");
         var category = await Db.FindAsync<Category>(categoryId) ?? throw new FinanceException("Err_NotFound");
+        var all = await Db.Table<Category>().ToListAsync();
+        if (all.Any(c => c.Kind == category.Kind && c.Id != categoryId && Category.SameName(c, name)))
+            throw new FinanceException("Err_CategoryExists");
         category.Name = name.Trim();
         category.NameBn = null; // the typed name is used in both languages from now on
         await Db.UpdateAsync(category);
@@ -453,6 +536,19 @@ public sealed class FinanceService(FinanceDatabase database)
 
         if (inserts.Count > 0) await Db.InsertAllAsync(inserts);
         return filled;
+    }
+
+    /// <summary>
+    /// Strikes a budget item through for one month — "won't pay this month" — or undoes it (ADR 0031).
+    /// Only that month changes; the item repeats into later months as before.
+    /// </summary>
+    public async Task SetBudgetSkippedAsync(string month, int categoryId, bool skipped)
+    {
+        await database.InitAsync();
+        var item = await Db.Table<BudgetItem>().FirstOrDefaultAsync(b => b.Month == month && b.CategoryId == categoryId)
+                   ?? throw new FinanceException("Err_NotFound");
+        item.Skipped = skipped;
+        await Db.UpdateAsync(item);
     }
 
     private const string DefaultBudgetKey = "default-budget-v1";
@@ -619,6 +715,27 @@ public sealed class FinanceService(FinanceDatabase database)
             }
             if (debt.Direction == DebtDirection.Borrowed)
                 c.Insert(LiabilityEngine.BuildPersonalDue(debt));
+        });
+    }
+
+    /// <summary>
+    /// Sets or changes the month borrowed money is to be paid back (ADR 0030); null = no month yet.
+    /// The debt is due on that month's last day, and counts in that month's dues from then on.
+    /// </summary>
+    public async Task SetDebtPayMonthAsync(int debtId, string? month)
+    {
+        var s = await LoadAsync();
+        var debt = s.Debts.FirstOrDefault(d => d.Id == debtId && d.Direction == DebtDirection.Borrowed)
+                   ?? throw new FinanceException("Err_NotFound");
+        var due = s.DueFor(DueSource.Personal, debtId) ?? throw new FinanceException("Err_NotFound");
+
+        debt.ExpectedReturnDate = month is null ? null : MonthKey.LastDay(month);
+        due.DueMonth = month ?? "";
+        due.DueDate = debt.ExpectedReturnDate;
+        await Db.RunInTransactionAsync(c =>
+        {
+            c.Update(debt);
+            c.Update(due);
         });
     }
 
