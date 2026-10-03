@@ -146,6 +146,19 @@ public class Due
     [Ignore] public long Remaining => Amount - PaidAmount;
 }
 
+/// <summary>
+/// The monthly salary from a month on (ADR 0035): added automatically as income on <see cref="Day"/> of every
+/// month into <see cref="AccountId"/>. An increment is a new row from that month; Amount 0 = stopped.
+/// </summary>
+public class SalaryRate
+{
+    [PrimaryKey, AutoIncrement] public int Id { get; set; }
+    [Indexed(Unique = true)] public string FromMonth { get; set; } = "";
+    public long Amount { get; set; }
+    public int AccountId { get; set; }
+    public int Day { get; set; } = 1;
+}
+
 /// <summary>Small key/value facts about the database itself, e.g. which one-time setup steps have run.</summary>
 public class AppMeta
 {

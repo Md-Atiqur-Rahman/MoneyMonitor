@@ -38,8 +38,20 @@ public sealed record FinanceSnapshot(
     List<RecurringBill> Bills,
     List<PersonalDebt> Debts,
     List<Due> Dues,
-    List<BudgetItem> Budget)
+    List<BudgetItem> Budget,
+    List<SalaryRate>? SalaryRates = null)
 {
+    /// <summary>The salary rate that applies in <paramref name="month"/>, if any (ADR 0035).</summary>
+    public SalaryRate? SalaryRateIn(string month) =>
+        (SalaryRates ?? []).Where(r => string.CompareOrdinal(r.FromMonth, month) <= 0)
+            .OrderByDescending(r => r.FromMonth, StringComparer.Ordinal).FirstOrDefault();
+
+    /// <summary>The monthly salary of <paramref name="month"/> (0 when none / stopped).</summary>
+    public long SalaryIn(string month) => SalaryRateIn(month)?.Amount ?? 0;
+
+    /// <summary>Expected income of a month: its salary when one is set, else the fallback from Settings.</summary>
+    private long Expected(string month, long fallback) => SalaryIn(month) is > 0 and var salary ? salary : fallback;
+
     public long Balance(Account account) => BalanceService.AccountBalance(account, Transactions);
 
     public long TotalBalance => BalanceService.TotalBalance(Accounts, Transactions);
@@ -94,7 +106,7 @@ public sealed record FinanceSnapshot(
             expectedIncome);
 
     public BudgetPlan Plan(string month, long expectedIncome) =>
-        BudgetService.Build(month, Categories, Transactions, Budget, Dues, Loans, expectedIncome);
+        BudgetService.Build(month, Categories, Transactions, Budget, Dues, Loans, Expected(month, expectedIncome));
 
     /// <summary>
     /// Next month's plan (ADR 0015). Income = expected income from Settings, or this month's
@@ -103,6 +115,8 @@ public sealed record FinanceSnapshot(
     public (BudgetPlan Plan, bool BudgetCopied, bool IncomeFromThisMonth) NextMonthPlan(DateTime today, long expectedIncome)
     {
         var month = MonthKey.Of(today);
+        var nextMonth = MonthKey.Add(month, 1);
+        expectedIncome = Expected(nextMonth, expectedIncome);
         var income = expectedIncome > 0 ? expectedIncome : Summary(month).Income;
         var unbilled = Cards.ToDictionary(c => c.Id, c => Unbilled(c, today));
         var (plan, copied) = BudgetService.BuildForecast(

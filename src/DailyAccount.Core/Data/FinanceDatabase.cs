@@ -37,6 +37,7 @@ public sealed class FinanceDatabase
             await Connection.CreateTableAsync<Due>();
             await Connection.CreateTableAsync<BudgetItem>();
             await Connection.CreateTableAsync<AppMeta>();
+            await Connection.CreateTableAsync<SalaryRate>();
 
             if (await Connection.Table<Category>().CountAsync() == 0)
                 await Connection.RunInTransactionAsync(SeedCategories);

@@ -20,6 +20,8 @@ public sealed class BackupData
     public List<PersonalDebt> Debts { get; set; } = [];
     public List<Due> Dues { get; set; } = [];
     public List<BudgetItem> Budget { get; set; } = [];
+    /// <summary>The monthly salary (ADR 0035); missing in older files.</summary>
+    public List<SalaryRate> SalaryRates { get; set; } = [];
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 

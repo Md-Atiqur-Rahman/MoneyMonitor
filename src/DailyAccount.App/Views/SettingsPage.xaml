@@ -54,6 +54,41 @@
             </Border>
 
             <!-- Expected income -->
+            <!-- Monthly salary, added automatically every month (ADR 0035) -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Label Text="{loc:Tr Salary_Title}" Style="{StaticResource H2}" />
+                    <Label Text="{loc:Tr Salary_Hint}" Style="{StaticResource Muted}" />
+                    <Grid ColumnDefinitions="*,90" ColumnSpacing="8">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="{loc:Tr Salary_Amount}" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}">
+                                <Entry Text="{Binding SalaryText}" Keyboard="Numeric" Placeholder="{loc:Tr Ph_Income}" />
+                            </Border>
+                        </VerticalStackLayout>
+                        <VerticalStackLayout Grid.Column="1" Spacing="4">
+                            <Label Text="{loc:Tr Salary_Day}" Style="{StaticResource Caption}" />
+                            <Border Style="{StaticResource Field}">
+                                <Entry Text="{Binding PayDayText}" Keyboard="Numeric" />
+                            </Border>
+                        </VerticalStackLayout>
+                    </Grid>
+                    <Label Text="{loc:Tr Salary_Account}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}">
+                        <Picker ItemsSource="{Binding SalaryAccounts}" SelectedItem="{Binding SalaryAccount}" />
+                    </Border>
+                    <Label Text="{loc:Tr Salary_From}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Field}">
+                        <Picker ItemsSource="{Binding SalaryMonths}" SelectedItem="{Binding SalaryFrom}" />
+                    </Border>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Button Text="{loc:Tr Salary_Save}" Command="{Binding SaveSalaryCommand}" />
+                        <Button Grid.Column="1" Text="{loc:Tr Salary_Stop}" Command="{Binding StopSalaryCommand}" IsVisible="{Binding HasSalary}" Style="{StaticResource Outline}" />
+                    </Grid>
+                    <Label Text="{Binding SalaryHistory}" Style="{StaticResource Muted}" />
+                </VerticalStackLayout>
+            </Border>
+
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="{loc:Tr ExpectedIncome}" Style="{StaticResource Caption}" />

@@ -24,7 +24,8 @@ public sealed class FinanceService(FinanceDatabase database)
             await Db.Table<RecurringBill>().ToListAsync(),
             await Db.Table<PersonalDebt>().ToListAsync(),
             await Db.Table<Due>().ToListAsync(),
-            await Db.Table<BudgetItem>().ToListAsync());
+            await Db.Table<BudgetItem>().ToListAsync(),
+            await Db.Table<SalaryRate>().ToListAsync());
     }
 
     /// <summary>
@@ -58,7 +59,97 @@ public sealed class FinanceService(FinanceDatabase database)
                 c.InsertAll(newDues);
             });
         }
+        await GenerateSalaryAsync(today); // every page that refreshes dues also gets the month's salary
         return newDues.Count;
+    }
+
+    // ---------- Monthly salary (ADR 0035) ----------
+
+    private static string SalaryKey(string month) => "salary:" + month;
+
+    /// <summary>
+    /// Adds the salary of every month from the first rate up to <paramref name="today"/> whose pay day has come,
+    /// once per month. A month that already has Salary income (typed by hand) is left alone, and a month whose
+    /// automatic salary was deleted is not added again. Returns how many were added.
+    /// </summary>
+    public async Task<int> GenerateSalaryAsync(DateTime today)
+    {
+        var s = await LoadAsync();
+        if (s.SalaryRates is not { Count: > 0 } rates) return 0;
+        var salary = s.Categories.FirstOrDefault(c => c.Kind == CategoryKind.Income && c.ParentId == null && c.Name == "Salary")
+                     ?? s.Categories.FirstOrDefault(c => c.Kind == CategoryKind.Income && c.ParentId == null);
+        var done = (await Db.Table<AppMeta>().ToListAsync()).Where(m => m.Key.StartsWith("salary:")).Select(m => m.Key).ToHashSet();
+
+        var added = 0;
+        var current = MonthKey.Of(today);
+        for (var month = rates.Min(r => r.FromMonth)!; string.CompareOrdinal(month, current) <= 0; month = MonthKey.Add(month, 1))
+        {
+            if (done.Contains(SalaryKey(month))) continue;
+            var rate = s.SalaryRateIn(month);
+            if (rate is not { Amount: > 0 }) continue;
+            var payDay = MonthKey.DayIn(month, rate.Day);
+            if (payDay > today.Date) continue;
+
+            var typed = s.Transactions.Any(t => t.Type == TransactionType.Income && t.CategoryId == salary?.Id && MonthKey.Contains(month, t.Date));
+            var key = SalaryKey(month);
+            await Db.RunInTransactionAsync(c =>
+            {
+                string value = "typed";
+                if (!typed)
+                {
+                    var t = new Transaction
+                    {
+                        Type = TransactionType.Income, AccountId = rate.AccountId, CategoryId = salary?.Id,
+                        Amount = rate.Amount, Date = payDay, Note = "Salary (automatic)"
+                    };
+                    c.Insert(t);
+                    value = t.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    added++;
+                }
+                c.InsertOrReplace(new AppMeta { Key = key, Value = value });
+            });
+        }
+        return added;
+    }
+
+    /// <summary>
+    /// Sets the salary from <paramref name="fromMonth"/> on (ADR 0035): the first time, or an increment. Later
+    /// rates are replaced by this one, and automatic salary entries already added from that month on take the
+    /// new amount and account. <paramref name="amount"/> 0 stops the salary from that month.
+    /// </summary>
+    public async Task SetSalaryAsync(string fromMonth, long amount, int accountId, int day)
+    {
+        await database.InitAsync();
+        if (amount < 0) throw new FinanceException("Err_Amount");
+        if (day is < 1 or > 31) throw new FinanceException("Err_Day");
+        if (amount > 0 && await Db.FindAsync<Account>(accountId) is null) throw new FinanceException("Err_Account");
+
+        var rates = await Db.Table<SalaryRate>().ToListAsync();
+        var meta = (await Db.Table<AppMeta>().ToListAsync())
+            .Where(m => m.Key.StartsWith("salary:") && string.CompareOrdinal(m.Key[7..], fromMonth) >= 0)
+            .ToList();
+        await Db.RunInTransactionAsync(c =>
+        {
+            foreach (var r in rates.Where(r => string.CompareOrdinal(r.FromMonth, fromMonth) >= 0)) c.Delete(r);
+            c.Insert(new SalaryRate { FromMonth = fromMonth, Amount = amount, AccountId = accountId, Day = day });
+
+            foreach (var m in meta)
+            {
+                if (!int.TryParse(m.Value, out var id)) continue; // typed by hand: not ours to change
+                var t = c.Find<Transaction>(id);
+                if (t is null) continue;
+                if (amount == 0)
+                {
+                    c.Delete(t);
+                    c.Delete<AppMeta>(m.Key);
+                    continue;
+                }
+                t.Amount = amount;
+                t.AccountId = accountId;
+                t.Date = MonthKey.DayIn(MonthKey.Of(t.Date), day);
+                c.Update(t);
+            }
+        });
     }
 
     // ---------- Accounts ----------
@@ -782,7 +873,7 @@ public sealed class FinanceService(FinanceDatabase database)
             CreatedAt = now,
             Accounts = s.Accounts, Categories = s.Categories, Transactions = s.Transactions,
             Loans = s.Loans, Cards = s.Cards, Bills = s.Bills, Debts = s.Debts, Dues = s.Dues,
-            Budget = s.Budget
+            Budget = s.Budget, SalaryRates = s.SalaryRates ?? []
         };
     }
 
@@ -793,6 +884,8 @@ public sealed class FinanceService(FinanceDatabase database)
         await Db.RunInTransactionAsync(c =>
         {
             c.DeleteAll<BudgetItem>();
+            c.DeleteAll<SalaryRate>();
+            c.Execute("DELETE FROM AppMeta WHERE Key LIKE 'salary:%'"); // the backup's months are marked again below
             c.DeleteAll<Due>();
             c.DeleteAll<Transaction>();
             c.DeleteAll<PersonalDebt>();
@@ -812,6 +905,7 @@ public sealed class FinanceService(FinanceDatabase database)
             foreach (var x in data.Dues) c.InsertOrReplace(x);
             foreach (var x in data.Transactions) c.InsertOrReplace(x);
             foreach (var x in data.Budget) c.InsertOrReplace(x);
+            foreach (var x in data.SalaryRates) c.InsertOrReplace(x);
         });
     }
 }
