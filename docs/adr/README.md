@@ -40,6 +40,7 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0033](0033-borrowed-money-in-budget-income.md) | Borrowed money counts in the month's income on the Budget | Accepted |
 | [0034](0034-card-loans-with-and-without-installments.md) | Card loans with and without installments; money received counts as income | Accepted |
 | [0035](0035-monthly-salary-added-automatically.md) | Monthly salary, added automatically and changeable from a month | Accepted |
+| [0036](0036-splash-picture.md) | Splash picture, app icon and name (মাসিক হিসাব), photo kept out of git | Accepted |
 
 ## Template
 

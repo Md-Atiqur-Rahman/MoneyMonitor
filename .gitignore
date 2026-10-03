@@ -488,3 +488,8 @@ artifacts/
 docs/*.xlsx
 tools/DailyAccount.SheetImport/
 tests/DailyAccount.Core.Tests/SheetScenarioTests.cs
+
+# Splash picture: a watermarked stock image, used on this PC only (ADR 0036)
+docs/money.png
+src/DailyAccount.App/Resources/Splash/moneysplash.svg
+src/DailyAccount.App/Resources/AppIconMoney/

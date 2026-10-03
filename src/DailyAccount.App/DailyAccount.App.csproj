@@ -13,7 +13,8 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Display name -->
-		<ApplicationTitle>Daily Account</ApplicationTitle>
+		<!-- The name under the launcher icon (ADR 0036) -->
+		<ApplicationTitle>মাসিক হিসাব</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.himel.dailyaccount</ApplicationId>
@@ -32,10 +33,14 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#1E6B4A" />
+		<!-- App icon (ADR 0036): the money picture when it is on this PC (not in git), else the default -->
+		<MauiIcon Include="Resources\AppIconMoney\appicon.svg" ForegroundFile="Resources\AppIconMoney\appiconfg.svg" Color="#F5F5F5" Condition="Exists('Resources\AppIconMoney\appiconfg.svg')" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#1E6B4A" Condition="!Exists('Resources\AppIconMoney\appiconfg.svg')" />
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1E6B4A" BaseSize="128,128" />
+		<!-- Splash (ADR 0036): the money picture when it is on this PC (not in git), else the default -->
+		<MauiSplashScreen Include="Resources\Splash\moneysplash.svg" Color="#F5F5F5" BaseSize="288,288" Condition="Exists('Resources\Splash\moneysplash.svg')" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1E6B4A" BaseSize="128,128" Condition="!Exists('Resources\Splash\moneysplash.svg')" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
