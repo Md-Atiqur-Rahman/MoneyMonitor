@@ -14,7 +14,7 @@
 > Also checked on the phone: a deletion survives force-closing the app and installing an update.
 
 ## Context
-The user wanted to remove a demo card purchase (Supermarket, 18 Sep, ৳1,759) that had already become
+The user wanted to remove a demo card purchase (Supermarket, 18 Sep, ৳1,500) that had already become
 part of the October card statement. Until now a purchase on a statement could never be deleted, because
 the statement amount was fixed when it was generated — so a wrong entry stayed on the bill forever.
 

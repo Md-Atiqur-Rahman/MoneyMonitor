@@ -19,7 +19,7 @@ public sealed record FlowRow(string Title, string Subtitle, string Amount, IComm
 
 /// <summary>
 /// Reports → Cash flow → Money in / Dues paid / Cash expenses, in detail (ADR 0032):
-/// "Salary 1,01,000 · Bonus 43,500 · Borrowed from Friend 30,000 · Total 1,74,500".
+/// "Salary 80,000 · Bonus 20,000 · Borrowed from Friend 10,000 · Total 1,10,000".
 /// </summary>
 public sealed partial class FlowViewModel(FinanceService finance, MonthState months) : ViewModelBase, IQueryAttributable
 {

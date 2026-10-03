@@ -5,8 +5,8 @@
 
 ## Context
 User feedback after importing September from the sheet:
-1. September's forecast for October should be the October card payment, ৳38,361.33 (EMIs 24,164.33 +
-   September's card purchases 14,197). It showed more.
+1. September's forecast for October should be the October card payment, ৳30,000 (EMIs 20,000 +
+   September's card purchases 10,000). It showed more.
 2. Loans in September should look like September: Loan-1 and Loan-2 start there ("1 of 6", "1 of 3"),
    Loan-3 is at 5 and Loan-4 at 3, and Loan-last (1 lac in 3) is fully paid in September.
 3. Liabilities → "Last month" in September should hold August's card purchases.
@@ -35,7 +35,7 @@ User feedback after importing September from the sheet:
 
 ## Consequences
 - An earlier month reads like the sheet of that month.
-- Amounts are whole poisha: 24,164.33 in the sheet is 24,164.32 in the app (each installment rounded, the
+- Amounts are whole poisha: 1,000.333 in the sheet is 1,000.33 in the app (each installment rounded, the
   last installment of a loan takes the remainder).
 - Tested: September's forecast counts its purchases once (and October's unbilled purchases still go to
   November); a loan as seen in August / September / October; a pay month counts from that month, can be

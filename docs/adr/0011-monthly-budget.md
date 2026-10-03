@@ -34,7 +34,7 @@ spending only.
   keeping both would double count. `RecurringBill` stays in the schema so old data/backups still load.
 
 ## Consequences
-- The app's main number matches the sheet's "Save" (tested against the sheet: −4,020.36 vs −4,020.33,
+- The app's main number matches the sheet's "Save" (tested against the sheet: −4,000.03 vs −4,000.00,
   the difference is EMI rounding, see [0012](0012-card-emi-loans.md)).
 - If every line of a month is removed, opening the month copies the previous budget again.
 - Past months without a budget are not back-filled.

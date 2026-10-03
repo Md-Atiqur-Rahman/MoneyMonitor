@@ -21,7 +21,7 @@ lists "Bajar on cash" and "Bajar on credit card" item by item.
   switcher.
 
 ## Consequences
-- Checked against the sheet for October: Bajar cash 4,100 + card 3,590; Cosmetics 2,255,
+- Checked against the sheet for October: Bajar cash 4,000 + card 3,000; Cosmetics 2,000,
   Grocery 2,165, Meat 1,600, Fish 1,050, Vegetables 500, Tiffin 120.
 - The breakdown total can differ from the Budget tab's "Spent" for the same category because card
   purchases are included here; the screen shows both numbers so the difference is visible.
@@ -33,5 +33,5 @@ lists "Bajar on cash" and "Bajar on credit card" item by item.
 ## Verification on the phone (2026-10-02)
 - October: Bajar total ৳830 (cash ৳830 · card ৳0), "Budget ৳18,000 · spent ৳830 · left ৳17,170"
   (same as the Budget tab); group Grocery ৳830 with Eggs · 30 (৳380) and Rice · 5kg (৳450), Cash.
-- September (via ‹): total ৳1,759, all on card; the Supermarket entry, saved without a type, appears
+- September (via ‹): total ৳1,500, all on card; the Supermarket entry, saved without a type, appears
   under group "Bajar", paid with "Credit Card".

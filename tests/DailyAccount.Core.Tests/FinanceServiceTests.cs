@@ -116,12 +116,12 @@ public sealed class FinanceServiceTests : IAsyncLifetime
     public async Task Deleting_one_purchase_reduces_the_unpaid_bill()
     {
         var (_, card) = await SetUpOctoberAsync(); // Sep purchase 3,000
-        await _svc.AddTransactionAsync(new Transaction { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(1_759), Date = new DateTime(2026, 9, 18) });
+        await _svc.AddTransactionAsync(new Transaction { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(1_500), Date = new DateTime(2026, 9, 18) });
         await _svc.GenerateDuesAsync(new DateTime(2026, 10, 2));
         var s = await _svc.LoadAsync();
-        Assert.Equal(Tk(4_759), s.Dues.Single(d => d.SourceType == DueSource.Card).Amount);
+        Assert.Equal(Tk(4_500), s.Dues.Single(d => d.SourceType == DueSource.Card).Amount);
 
-        await _svc.DeleteTransactionAsync(s.Transactions.Single(t => t.Amount == Tk(1_759)).Id);
+        await _svc.DeleteTransactionAsync(s.Transactions.Single(t => t.Amount == Tk(1_500)).Id);
 
         s = await _svc.LoadAsync();
         var bill = s.Dues.Single(d => d.SourceType == DueSource.Card);

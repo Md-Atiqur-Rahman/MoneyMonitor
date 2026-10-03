@@ -4,7 +4,7 @@
 - Date: 2026-10-03
 
 > **Amended 2026-10-03 (user request):** **+ Expense** on the Dues page also fills in the **amount** — the
-> amount still left on that budget item (e.g. Electric ৳2,049). It can be changed before saving
+> amount still left on that budget item (e.g. Electric ৳2,000). It can be changed before saving
 > (`addtx?type=expense&categoryId=…&amount=<poisha>`).
 
 > **Amended 2026-10-03 (user request) — Budget → Due:** every budget item with something left has a
@@ -16,8 +16,8 @@
 
 ## Context
 Home's **Due** card showed the budget items not paid yet (the sheet's "Due" column: estimate − paid),
-e.g. ৳53,619, while the **Dues tab** showed something else — the card bill and loan installments
-(৳26,739.17). Two different meanings of "due" with two different numbers confused the user, who
+e.g. ৳50,000, while the **Dues tab** showed something else — the card bill and loan installments
+(৳25,000). Two different meanings of "due" with two different numbers confused the user, who
 decided that the Dues page is where the budget "Due" belongs.
 
 ## Decision

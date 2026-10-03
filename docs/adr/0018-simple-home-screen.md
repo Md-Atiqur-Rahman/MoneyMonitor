@@ -9,7 +9,7 @@
 > follows the sheet's "Due" column: the sum of **estimate − spent** over the budget items (an overspent
 > item counts as 0), plus loans/personal dues that are not on a credit card. The card payment is still
 > excluded (own row). The card opens the **Budget tab** (each item's "Left"), no longer the Dues tab.
-> Example on the phone: budget ৳65,799 − spent ৳12,180 = Due ৳53,619.
+> Example on the phone: budget ৳60,000 − spent ৳10,000 = Due ৳50,000.
 
 > **Amended 2026-10-02 (user request):** the "In all accounts" card is renamed **Bank Balance** (it still
 > includes every account, cash too), and the **next-month forecast is the last card** on Home.

@@ -5,9 +5,9 @@
 
 ## Context
 After the budget ([0011](0011-monthly-budget.md)) was added, Home showed two answers that looked
-contradictory: this month's plan said "need to borrow ৳4,020" while the old forecast said
+contradictory: this month's plan said "need to borrow ৳4,000" while the old forecast said
 "November: no need to borrow". The old forecast estimated spending as the average of past months —
-with only one month of history that was just September's card purchases (৳14,197) — and ignored
+with only one month of history that was just September's card purchases (৳10,000) — and ignored
 the budget the user actually plans with.
 
 ## Decision

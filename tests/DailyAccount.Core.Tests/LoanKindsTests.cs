@@ -22,7 +22,7 @@ public sealed class LoanKindsTests : IAsyncLifetime
         _svc = new FinanceService(_db);
         _bank = new Account { Name = "Bank", Type = AccountType.Bank };
         await _svc.AddAccountAsync(_bank);
-        _card = new CreditCard { Name = "Card", CreditLimit = Tk(320_000), StatementDay = 1, DueDay = 15, PayFromAccountId = _bank.Id };
+        _card = new CreditCard { Name = "Card", CreditLimit = Tk(300_000), StatementDay = 1, DueDay = 15, PayFromAccountId = _bank.Id };
         await _svc.AddCardAsync(_card, new DateTime(2026, 10, 1));
     }
 

@@ -6,7 +6,7 @@
 > **Amended by [0020](0020-default-budget-and-wording.md):** the user-facing words are now **Monthly** / **Stops after this month** / **Stop from next month** / **Make monthly again** / **Delete from budget**.
 
 ## Context
-The user wants a budget item (Bajar ৳18,000, Rent ৳11,350, Restaurant Bill ৳2,000…) to be set once and
+The user wants a budget item (Bajar ৳15,000, Rent ৳12,000, Restaurant Bill ৳2,000…) to be set once and
 then appear in every following month with the same amount — but also to be able to say "this one is
 only for this month" (e.g. Eid shopping). They also want to see the month's **total budget**.
 

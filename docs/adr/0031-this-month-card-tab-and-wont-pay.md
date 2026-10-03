@@ -5,8 +5,8 @@
 
 ## Context
 1. The Cards tab listed "Purchases this cycle" under the card. The user wants them in their own tab next to
-   Cards, and "Next month so far" shown in parts like the sheet: EMI 24,164.33 + Purchases 14,197 =
-   38,361 — Purchases opening that tab. "You owe in total" should show this month's part too.
+   Cards, and "Next month so far" shown in parts like the sheet: EMI 20,000 + Purchases 10,000 =
+   30,000 — Purchases opening that tab. "You owe in total" should show this month's part too.
 2. In September some budget items weren't paid for lack of money and won't be. The user wants to strike
    such an item through so it leaves the month's Total Budget and Due — and to undo it.
 

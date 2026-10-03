@@ -89,7 +89,7 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         var s = await _svc.LoadAsync();
         var bajar = s.Categories.Single(c => c.Name == "Bajar");
         var fish = s.Categories.Single(c => c.Name == "Fish");
-        await _svc.SetBudgetAsync("2026-10", bajar.Id, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", bajar.Id, Tk(15_000));
         await _svc.AddTransactionAsync(new() { Type = TransactionType.Expense, AccountId = cash.Id, CategoryId = fish.Id, ItemName = "Rui", Amount = Tk(730), Date = new DateTime(2026, 10, 2) });
 
         await _svc.DeleteCategoryAsync(fish.Id);
@@ -120,7 +120,7 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         var bajar = s.Categories.Single(c => c.Name == "Bajar");
         var fish = s.Categories.Single(c => c.Name == "Fish");
 
-        await _svc.SetBudgetAsync("2026-10", bajar.Id, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", bajar.Id, Tk(15_000));
         await _svc.AddTransactionsAsync(
         [
             new() { Type = TransactionType.Expense, AccountId = cash.Id, CategoryId = fish.Id, ItemName = "Rui", Quantity = "2kg", Amount = Tk(730), Date = new DateTime(2026, 10, 2) },
@@ -132,10 +132,10 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         var plan = (await _svc.LoadAsync()).Plan("2026-10", Tk(50_000));
         var line = plan.Lines.Single(l => l.CategoryId == bajar.Id);
         Assert.Equal(Tk(800), line.Spent);
-        Assert.Equal(Tk(17_200), line.Left);
+        Assert.Equal(Tk(14_200), line.Left);
         Assert.Contains(plan.Lines, l => !l.InBudget && l.Spent == Tk(600));
         Assert.True(plan.IncomeIsExpected);
-        Assert.Equal(Tk(50_000 - 18_000), plan.Save);
+        Assert.Equal(Tk(50_000 - 15_000), plan.Save);
     }
 
     [Fact]
@@ -163,8 +163,8 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
     public async Task Repeating_lines_carry_over_and_only_this_month_lines_do_not()
     {
         var (rent, bajar, eid) = await BudgetCategoriesAsync();
-        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));                       // every month (default)
-        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000), onlyThisMonth: false);
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(12_000));                       // every month (default)
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(15_000), onlyThisMonth: false);
         await _svc.SetBudgetAsync("2026-10", eid, Tk(5_000), onlyThisMonth: true);    // one-off
 
         Assert.True(await _svc.EnsureBudgetAsync("2026-11"));
@@ -174,14 +174,14 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
 
         // The in-memory forecast follows the same rule.
         var (plan, _, _) = (await _svc.LoadAsync()).NextMonthPlan(new DateTime(2026, 10, 2), Tk(100_000));
-        Assert.Equal(Tk(11_350 + 18_000), plan.BudgetEstimate);
+        Assert.Equal(Tk(12_000 + 15_000), plan.BudgetEstimate);
     }
 
     [Fact]
     public async Task Changing_a_repeating_line_updates_later_months_already_created()
     {
         var (rent, _, _) = await BudgetCategoriesAsync();
-        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(12_000));
         await _svc.EnsureBudgetAsync("2026-11");
         await _svc.EnsureBudgetAsync("2026-12");
 
@@ -195,11 +195,11 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
     public async Task Making_a_line_only_this_month_removes_it_from_later_months()
     {
         var (rent, bajar, _) = await BudgetCategoriesAsync();
-        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
-        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(12_000));
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(15_000));
         await _svc.EnsureBudgetAsync("2026-11");
 
-        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000), onlyThisMonth: true);
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(15_000), onlyThisMonth: true);
 
         var s = await _svc.LoadAsync();
         Assert.True(s.Budget.Single(b => b.Month == "2026-10" && b.CategoryId == bajar).OnlyThisMonth);
@@ -211,7 +211,7 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
     {
         var (rent, _, _) = await BudgetCategoriesAsync();
         await _svc.SetBudgetAsync("2026-09", rent, Tk(11_000));
-        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(12_000));
         await _svc.EnsureBudgetAsync("2026-11");
 
         await _svc.RemoveBudgetAsync("2026-10", rent);
@@ -225,14 +225,14 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         var cash = new Account { Name = "Cash", Type = AccountType.Cash, OpeningBalance = Tk(10_000) };
         await _svc.AddAccountAsync(cash);
         var (rent, bajar, _) = await BudgetCategoriesAsync();
-        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
-        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(12_000));
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(15_000));
         await _svc.AddTransactionAsync(new() { Type = TransactionType.Expense, AccountId = cash.Id, CategoryId = bajar, Amount = Tk(830), Date = new DateTime(2026, 10, 2) });
 
         var plan = (await _svc.LoadAsync()).Plan("2026-10", 0);
-        Assert.Equal(Tk(29_350), plan.BudgetEstimate);
+        Assert.Equal(Tk(27_000), plan.BudgetEstimate);
         Assert.Equal(Tk(830), plan.BudgetSpent);
-        Assert.Equal(Tk(28_520), plan.BudgetLeft);
+        Assert.Equal(Tk(26_170), plan.BudgetLeft);
     }
 
     [Fact]
@@ -284,12 +284,12 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         await _svc.AddAccountAsync(cash);
         var (rent, bajar, _) = await BudgetCategoriesAsync();
         var gas = (await _svc.LoadAsync()).Categories.Single(c => c.Name == "Gas").Id;
-        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
-        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(12_000));
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(15_000));
         await _svc.SetBudgetAsync("2026-10", gas, Tk(1_700));
         async Task Spend(int cat, decimal amount) => await _svc.AddTransactionAsync(new()
             { Type = TransactionType.Expense, AccountId = cash.Id, CategoryId = cat, Amount = Tk(amount), Date = new DateTime(2026, 10, 2) });
-        await Spend(rent, 11_350);   // fully paid
+        await Spend(rent, 12_000);   // fully paid
         await Spend(bajar, 830);     // 17,170 left
         await Spend(gas, 2_000);     // overspent by 300 → counts as 0, not −300
 
@@ -297,17 +297,17 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         await _svc.AddLoanAsync(new Loan { Lender = "Friend", TotalPayable = Tk(3_000), InstallmentCount = 3, StartMonth = "2026-10", DueDay = 20 });
 
         var s = await _svc.LoadAsync();
-        Assert.Equal(Tk(17_170), s.Plan("2026-10", 0).UnpaidBudget);
+        Assert.Equal(Tk(14_170), s.Plan("2026-10", 0).UnpaidBudget);
         Assert.Equal(Tk(1_000), Assert.Single(s.NonCardDuesUpTo("2026-10")).Remaining);
-        Assert.Equal(Tk(18_170), s.MonthDue("2026-10", 0));
+        Assert.Equal(Tk(15_170), s.MonthDue("2026-10", 0));
     }
 
     [Fact]
     public async Task Starting_earlier_fills_past_months_from_the_first_budget()
     {
         var (rent, bajar, eid) = await BudgetCategoriesAsync();
-        await _svc.SetBudgetAsync("2026-10", rent, Tk(11_350));
-        await _svc.SetBudgetAsync("2026-10", bajar, Tk(18_000));
+        await _svc.SetBudgetAsync("2026-10", rent, Tk(12_000));
+        await _svc.SetBudgetAsync("2026-10", bajar, Tk(15_000));
         await _svc.SetBudgetAsync("2026-10", eid, Tk(5_000), onlyThisMonth: true);
 
         Assert.Equal(2, await _svc.FillBudgetMonthsAsync("2026-08", "2026-10")); // Aug, Sep filled; Oct kept
@@ -318,7 +318,7 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         {
             var lines = s.Budget.Where(b => b.Month == m).ToList();
             Assert.Equal(new[] { rent, bajar }.Order(), lines.Select(b => b.CategoryId).Order()); // one-off Eid not copied
-            Assert.Equal(Tk(29_350), lines.Sum(b => b.Estimate));
+            Assert.Equal(Tk(27_000), lines.Sum(b => b.Estimate));
         }
         Assert.Equal(3, s.Budget.Count(b => b.Month == "2026-10"));
     }
@@ -352,8 +352,8 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
         var s = await _svc.LoadAsync();
         var rent = s.Categories.Single(c => c.Name == "Rent");
         await _svc.SetBudgetAsync("2026-10", rent.Id, Tk(11_000));
-        await _svc.SetBudgetAsync("2026-10", rent.Id, Tk(11_350));
-        Assert.Equal(Tk(11_350), Assert.Single((await _svc.LoadAsync()).Budget).Estimate);
+        await _svc.SetBudgetAsync("2026-10", rent.Id, Tk(12_000));
+        Assert.Equal(Tk(12_000), Assert.Single((await _svc.LoadAsync()).Budget).Estimate);
 
         await _svc.RemoveBudgetAsync("2026-10", rent.Id);
         Assert.Empty((await _svc.LoadAsync()).Budget);
@@ -374,18 +374,18 @@ public sealed class BudgetAndCategoryTests : IAsyncLifetime
     {
         var bank = new Account { Name = "Prime", OpeningBalance = Tk(100) };
         await _svc.AddAccountAsync(bank);
-        bank.OpeningBalance = Tk(74_350);
+        bank.OpeningBalance = Tk(70_000);
         bank.Name = "Bank A";
         await _svc.UpdateAccountAsync(bank);
 
         var card = new CreditCard { Name = "SCB", CreditLimit = Tk(1_000), StatementDay = 1, DueDay = 15 };
         await _svc.AddCardAsync(card, DateTime.Today);
-        card.CreditLimit = Tk(320_000);
+        card.CreditLimit = Tk(300_000);
         card.DueDay = 20;
         await _svc.UpdateCardAsync(card);
 
         var s = await _svc.LoadAsync();
-        Assert.Equal(Tk(74_350), s.Balance(s.Accounts.Single()));
+        Assert.Equal(Tk(70_000), s.Balance(s.Accounts.Single()));
         Assert.Equal(20, s.Cards.Single().DueDay);
     }
 }

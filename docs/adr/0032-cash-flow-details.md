@@ -5,9 +5,9 @@
 
 ## Context
 Reports → Cash flow showed three numbers (Income, Dues paid, Cash expenses) with no way to see what was
-in them. The user wants to understand how money came in: "Salary 1,01,000, Bonus 43,500, Borrowed from
-a friend 30,000, Total 1,74,500" — and the same detail for dues paid and cash expenses. The sheet counts
-borrowed money as part of the month's money ("Total 174,500").
+in them. The user wants to understand how money came in: "Salary 80,000, Bonus 20,000, Borrowed from
+a friend 10,000, Total 1,10,000" — and the same detail for dues paid and cash expenses. The sheet counts
+borrowed money as part of the month's money (the month's total includes it).
 
 ## Decision
 - `CashFlowService.Build` (Core) → `CashFlow`: **money in** by income category, money borrowed (per person)
@@ -15,8 +15,8 @@ borrowed money as part of the month's money ("Total 174,500").
   repayment, with date and account); **cash expenses** per top-level category with its entries (sub-categories
   add into their parent). `Net` = money in − dues paid − cash expenses = what the month left in the accounts.
 - Reports → Cash flow: the first line is **Money in** (income + borrowed + returned), and "Saved so far" /
-  "Projected savings" / the 6-month trend use that cash flow. September: 1,74,500 − 1,15,043.66 − 57,990 =
-  **1,466.34**, the sheet's "Bank" result.
+  "Projected savings" / the 6-month trend use that cash flow. Example: 1,10,000 − 60,000 − 45,000 =
+  **5,000**, the sheet's "Bank" result.
 - Each line is tappable → **flow?kind=in|dues|spent**: a page with the month (‹ › shared, ADR 0029), one
   row per part and the **Total**. Dues paid read "Loan-1 · installment 1 of 6 · EMI on Credit Card
   Card", "Credit Card · August purchases", "Paid back Friend". Cash expense rows open the

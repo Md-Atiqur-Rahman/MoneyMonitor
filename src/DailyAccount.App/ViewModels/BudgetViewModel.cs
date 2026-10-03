@@ -85,7 +85,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
             MonthTitle: Fmt.Month(SelectedMonth),
             IncomeLabel: Loc.T(plan.IncomeIsExpected ? "Budget_IncomeExpected" : "Budget_Income"),
             Income: Fmt.Money(plan.Income),
-            // "income ৳1,44,500 + borrowed ৳30,000" when something was borrowed (ADR 0033).
+            // "income ৳1,00,000 + borrowed ৳10,000" when something was borrowed (ADR 0033).
             IncomeParts: plan.Borrowed > 0 ? Loc.F("Budget_IncomeParts", Fmt.Money(plan.Earned), Fmt.Money(plan.Borrowed)) : "",
             Payments: Fmt.Money(plan.DueLines.Sum(l => l.Estimate)),
             BudgetItems: Fmt.Money(plan.BudgetEstimate),

@@ -31,12 +31,12 @@ public sealed class MonthViewTests : IAsyncLifetime
     {
         var bank = new Account { Name = "Bank", Type = AccountType.Bank, OpeningBalance = Tk(100_000) };
         await _svc.AddAccountAsync(bank);
-        var card = new CreditCard { Name = "Card", CreditLimit = Tk(320_000), StatementDay = 1, DueDay = 15, PayFromAccountId = bank.Id };
+        var card = new CreditCard { Name = "Card", CreditLimit = Tk(300_000), StatementDay = 1, DueDay = 15, PayFromAccountId = bank.Id };
         await _svc.AddCardAsync(card, new DateTime(2026, 9, 1));
         // 50,000 in 6, first installment in September.
         var loan = new Loan { Lender = "Loan-1", Principal = Tk(50_000), TotalPayable = Tk(50_000), InstallmentCount = 6, StartMonth = "2026-09", DueDay = 15, CardId = card.Id };
         await _svc.AddLoanAsync(loan);
-        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(14_197), Date = new DateTime(2026, 9, 20) });
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(10_000), Date = new DateTime(2026, 9, 20) });
         await _svc.GenerateDuesAsync(new DateTime(2026, 10, 3)); // statement of 1 Oct for September's purchases
         return (bank, card, loan);
     }
@@ -50,14 +50,14 @@ public sealed class MonthViewTests : IAsyncLifetime
         // Seen from September (as of 30 Sept) the September cycle is already on October's statement.
         Assert.Equal(0, s.Unbilled(card, new DateTime(2026, 9, 30)));
         var (october, _, _) = s.NextMonthPlan(new DateTime(2026, 9, 30), 0);
-        Assert.Equal(Tk(8_333.33m) + Tk(14_197), october.DueLines.Sum(l => l.Estimate));
+        Assert.Equal(Tk(8_333.33m) + Tk(10_000), october.DueLines.Sum(l => l.Estimate));
 
         // Seen from October (today) the October cycle is not billed yet: it is added to November.
-        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(3_590), Date = new DateTime(2026, 10, 2) });
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(3_000), Date = new DateTime(2026, 10, 2) });
         s = await _svc.LoadAsync();
-        Assert.Equal(Tk(3_590), s.Unbilled(card, new DateTime(2026, 10, 3)));
+        Assert.Equal(Tk(3_000), s.Unbilled(card, new DateTime(2026, 10, 3)));
         var (november, _, _) = s.NextMonthPlan(new DateTime(2026, 10, 3), 0);
-        Assert.Equal(Tk(8_333.33m) + Tk(3_590), november.DueLines.Sum(l => l.Estimate));
+        Assert.Equal(Tk(8_333.33m) + Tk(3_000), november.DueLines.Sum(l => l.Estimate));
     }
 
     [Fact]
@@ -123,25 +123,25 @@ public sealed class MonthViewTests : IAsyncLifetime
     public async Task Card_parts_add_up_in_september_and_october()
     {
         var (_, card, _) = await SeptemberAsync();
-        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(3_590), Date = new DateTime(2026, 10, 2) });
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(3_000), Date = new DateTime(2026, 10, 2) });
         var s = await _svc.LoadAsync();
         var sep30 = new DateTime(2026, 9, 30);
         var oct3 = new DateTime(2026, 10, 3);
 
         // September: its purchases are "this month" (already on the 1 Oct statement); EMIs 41,666.67 left.
         var sep = s.CardOwedOn(card, sep30);
-        Assert.Equal(Tk(14_197), sep.ThisMonth);
+        Assert.Equal(Tk(10_000), sep.ThisMonth);
         Assert.Equal(0, sep.LastMonth);
         Assert.Equal(Tk(50_000), sep.Emi); // nothing paid yet in this test
         Assert.Equal(sep.Total + 0, s.OwedIn("2026-09", sep30));
-        Assert.Equal(new CardNext(Tk(8_333.33m), Tk(14_197)), s.CardNextMonth(card, "2026-09", sep30));
+        Assert.Equal(new CardNext(Tk(8_333.33m), Tk(10_000)), s.CardNextMonth(card, "2026-09", sep30));
         Assert.Equal(s.CyclePurchases(card, sep30).Sum(t => t.Amount), sep.ThisMonth);
 
         // October: September's statement is now "last month"; October's purchases are this month.
         var oct = s.CardOwedOn(card, oct3);
-        Assert.Equal(Tk(3_590), oct.ThisMonth);
-        Assert.Equal(Tk(14_197), oct.LastMonth);
-        Assert.Equal(new CardNext(Tk(8_333.33m), Tk(3_590)), s.CardNextMonth(card, "2026-10", oct3));
+        Assert.Equal(Tk(3_000), oct.ThisMonth);
+        Assert.Equal(Tk(10_000), oct.LastMonth);
+        Assert.Equal(new CardNext(Tk(8_333.33m), Tk(3_000)), s.CardNextMonth(card, "2026-10", oct3));
         Assert.Equal(s.CardLimitUsed(card, oct3), oct.Total);
     }
 
@@ -190,19 +190,19 @@ public sealed class MonthViewTests : IAsyncLifetime
         var sep1 = new DateTime(2026, 9, 1);
         await _svc.AddTransactionsAsync(
         [
-            new() { Type = TransactionType.Income, AccountId = bank.Id, CategoryId = Cat("Salary"), Amount = Tk(101_000), Date = sep1 },
-            new() { Type = TransactionType.Income, AccountId = bank.Id, CategoryId = Cat("Bonus"), Amount = Tk(43_500), Date = sep1 },
-            new() { Type = TransactionType.Expense, AccountId = bank.Id, CategoryId = Cat("Rent"), Amount = Tk(11_350), Date = sep1 },
+            new() { Type = TransactionType.Income, AccountId = bank.Id, CategoryId = Cat("Salary"), Amount = Tk(80_000), Date = sep1 },
+            new() { Type = TransactionType.Income, AccountId = bank.Id, CategoryId = Cat("Bonus"), Amount = Tk(20_000), Date = sep1 },
+            new() { Type = TransactionType.Expense, AccountId = bank.Id, CategoryId = Cat("Rent"), Amount = Tk(12_000), Date = sep1 },
             new() { Type = TransactionType.Expense, AccountId = bank.Id, CategoryId = s.Categories.Single(c => c.Name == "Fish").Id, Amount = Tk(730), Date = sep1 },
             new() { Type = TransactionType.Expense, AccountId = bank.Id, CategoryId = Cat("Bajar"), Amount = Tk(270), Date = sep1 },
         ]);
-        await _svc.AddPersonalDebtAsync(new PersonalDebt { PersonName = "Friend", Direction = DebtDirection.Borrowed, Amount = Tk(30_000), Date = sep1, AccountId = bank.Id });
+        await _svc.AddPersonalDebtAsync(new PersonalDebt { PersonName = "Friend", Direction = DebtDirection.Borrowed, Amount = Tk(10_000), Date = sep1, AccountId = bank.Id });
         await _svc.PayCardBillAsync(card.Id, "2026-09", Tk(8_333.33m), bank.Id, new DateTime(2026, 9, 15));
 
         var flow = (await _svc.LoadAsync()).CashFlow("2026-09");
-        Assert.Equal(Tk(174_500), flow.MoneyIn);
+        Assert.Equal(Tk(110_000), flow.MoneyIn);
         Assert.Equal([MoneyInKind.Income, MoneyInKind.Income, MoneyInKind.Borrowed], flow.In.Select(l => l.Kind));
-        Assert.Equal(Tk(101_000), flow.In[0].Amount); // Salary before Bonus (category order)
+        Assert.Equal(Tk(80_000), flow.In[0].Amount); // Salary before Bonus (category order)
 
         var installment = Assert.Single(flow.DuesPaid);
         Assert.Equal(loan.Id, installment.Due.SourceId);
@@ -213,14 +213,14 @@ public sealed class MonthViewTests : IAsyncLifetime
         var bajar = flow.Spent.Single(g => g.CategoryId == Cat("Bajar"));
         Assert.Equal(Tk(1_000), bajar.Amount);
         Assert.Equal(2, bajar.Entries.Count);
-        Assert.Equal(Tk(12_350), flow.CashSpent);
-        Assert.Equal(Tk(174_500) - Tk(8_333.33m) - Tk(12_350), flow.Net);
+        Assert.Equal(Tk(13_000), flow.CashSpent);
+        Assert.Equal(Tk(110_000) - Tk(8_333.33m) - Tk(13_000), flow.Net);
 
         // The budget counts the borrowed money as money to spend too (ADR 0033).
-        var plan = (await _svc.LoadAsync()).Plan("2026-09", Tk(101_000));
-        Assert.Equal(Tk(174_500), plan.Income);
-        Assert.Equal(Tk(30_000), plan.Borrowed);
-        Assert.Equal(Tk(144_500), plan.Earned);
+        var plan = (await _svc.LoadAsync()).Plan("2026-09", Tk(80_000));
+        Assert.Equal(Tk(110_000), plan.Income);
+        Assert.Equal(Tk(10_000), plan.Borrowed);
+        Assert.Equal(Tk(100_000), plan.Earned);
         Assert.False(plan.IncomeIsExpected);
     }
 }
