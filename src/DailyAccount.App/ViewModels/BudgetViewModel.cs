@@ -24,6 +24,8 @@ public sealed record ForecastModel(
     string Title, string Payments, string BudgetLabel, string Budget, string Needed,
     string IncomeLabel, string Income, string Save, string Result, bool IsShort, bool IncomeFromThisMonth)
 {
+    /// <summary>"Save" or "Short" (ADR 0049).</summary>
+    public string SaveLabel => Loc.T(IsShort ? "Budget_Short" : "Budget_Save");
     public bool IsOk => !IsShort;
 }
 
@@ -50,6 +52,8 @@ public sealed record BudgetModel(
     string ItemsNote = "")
 {
     public bool HasForecast => Forecast is not null;
+    /// <summary>"Save" or "Short" (ADR 0049).</summary>
+    public string SaveLabel => Loc.T(SaveIsNegative ? "Budget_Short" : "Budget_Save");
     public bool HasIncomeParts => IncomeParts.Length > 0;
     public bool SaveIsOk => !SaveIsNegative;
     public bool HasDues => DueRows.Count > 0;
@@ -97,7 +101,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
             Planned: Fmt.Money(plan.TotalEstimate),
             Spent: Fmt.Money(plan.TotalSpent),
             Left: Fmt.Money(plan.TotalLeft),
-            Save: Fmt.Money(plan.Save),
+            Save: Fmt.Money(Math.Abs(plan.Save)), // "Short ৳x" when negative (ADR 0049)
             SaveIsNegative: plan.Save < 0,
             Banner: plan.Save < 0 ? Loc.F("Budget_NeedBorrow", Fmt.Money(plan.NeedToBorrow)) : Loc.F("Budget_Ok", Fmt.Money(plan.Save)),
             DueRows: plan.DueLines.Select(l => DueRow(l, s)).ToList(),
@@ -124,7 +128,7 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
             Fmt.Money(next.TotalEstimate),
             Loc.T(incomeFromThisMonth ? "Fc_IncomeThisMonth" : "Fc_Income"),
             Fmt.Money(next.Income),
-            Fmt.Money(next.Save),
+            Fmt.Money(Math.Abs(next.Save)),
             next.Save < 0 ? Loc.F("Budget_NeedBorrow", Fmt.Money(next.NeedToBorrow)) : Loc.F("Budget_Ok", Fmt.Money(next.Save)),
             next.Save < 0,
             incomeFromThisMonth);

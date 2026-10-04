@@ -24,6 +24,8 @@ public sealed record DashboardModel(
     string BudgetTitle,
     string PrevCardLabel,
     string PrevCarriedLabel,
+    string PrevSavedLabel,
+    string NextSaveLabel,
     string Savings,
     bool SavingsIsNegative,
     string SavingsSub,
@@ -109,18 +111,22 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
             IsCurrentMonth: isCurrent,
             CanGoNext: !isCurrent,
             BankTitle: isCurrent ? Loc.T("Home_Accounts") : Loc.F("Home_AccountsOn", Fmt.Date(lastDay)),
-            SavingsTitle: isCurrent ? Loc.T("Home_Savings") : Loc.F("Home_SavingsIn", monthName),
+            SavingsTitle: plan.Save < 0
+                ? (isCurrent ? Loc.T("Home_Short") : Loc.F("Home_ShortIn", monthName))
+                : (isCurrent ? Loc.T("Home_Savings") : Loc.F("Home_SavingsIn", monthName)),
+            PrevSavedLabel: Loc.T(prev.Saved < 0 ? "Home_PrevShort" : "Home_PrevSaved"),
+            NextSaveLabel: Loc.T(next.Save < 0 ? "Home_AssumedShort" : "Home_AssumedSavings"),
             BudgetTitle: isCurrent ? Loc.T("Home_Budget") : Loc.F("Home_BudgetIn", monthName),
             PrevCardLabel: Loc.F("Home_PrevCardIn", monthName),
             PrevCarriedLabel: Loc.F("Home_PrevCarriedIn", monthName),
-            Savings: Fmt.Money(plan.Save),
+            Savings: Fmt.Money(Math.Abs(plan.Save)), // a shortfall is named so, without a minus (ADR 0049)
             SavingsIsNegative: plan.Save < 0,
             SavingsSub: plan.Save < 0
                 ? Loc.F("Budget_NeedBorrow", Fmt.Money(plan.NeedToBorrow))
                 : Loc.T("Home_SavingsSub"),
             NextTitle: Loc.F("Home_NextMonth", Fmt.MonthName(next.Month)),
             NextPayments: Fmt.Money(next.DueLines.Sum(l => l.Estimate)),
-            NextSave: Fmt.Money(next.Save),
+            NextSave: Fmt.Money(Math.Abs(next.Save)),
             NextIsShort: next.Save < 0,
             NextSub: next.Save < 0
                 ? Loc.F("Budget_NeedBorrow", Fmt.Money(next.NeedToBorrow))
@@ -128,7 +134,7 @@ public sealed partial class DashboardViewModel(FinanceService finance, AppSettin
             Budget: Fmt.Money(plan.BudgetEstimate),
             BudgetSub: Loc.F("Home_BudgetSub", Fmt.Money(plan.BudgetSpent), Fmt.Money(plan.BudgetLeft)),
             PrevTitle: Loc.F("Home_PrevTitle", Fmt.MonthName(prev.Month)),
-            PrevSaved: Fmt.Money(prev.Saved),
+            PrevSaved: Fmt.Money(Math.Abs(prev.Saved)),
             PrevSavedNegative: prev.Saved < 0,
             PrevSub: Loc.F("Home_PrevSub", Fmt.Money(prev.Income), Fmt.Money(prev.CashExpenses), Fmt.Money(prev.BillsPaid)),
             PrevCard: Fmt.Money(prev.CardToNextBill),

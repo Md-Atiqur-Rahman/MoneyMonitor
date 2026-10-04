@@ -73,7 +73,7 @@
                         </Grid>
                         <!-- The result after the due too (user: dues first, then what is saved; ADR 0048 note) -->
                         <BoxView Grid.Row="4" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
-                        <Label Grid.Row="5" Text="{loc:Tr Reports_SavedAfterDue}" FontAttributes="Bold" FontSize="17" />
+                        <Label Grid.Row="5" Text="{Binding Model.SavedLabel}" FontAttributes="Bold" FontSize="17" />
                         <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.ProjectedSavings}" FontAttributes="Bold" FontSize="17" TextColor="{StaticResource Primary}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding Model.ProjectedNegative}" Value="True">

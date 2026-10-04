@@ -18,6 +18,7 @@ public sealed record ReportModel(
     string DuesStillNote,
     string ProjectedSavings,
     bool ProjectedNegative,
+    string SavedLabel,
     string BeforeDueNote,
     string SpendingTotal,
     string SpendingSub,
@@ -88,8 +89,9 @@ public sealed partial class ReportsViewModel(FinanceService finance, MonthState 
             // "Due this month", the same number as Home and the Dues page (ADR 0048).
             DuesStill: "−" + Fmt.Money(due),
             DuesStillNote: Loc.F("Reports_DueParts", Fmt.Money(dueLiabilities), Fmt.Money(due - dueLiabilities)),
-            ProjectedSavings: Fmt.Money(flow.Net - due),
+            ProjectedSavings: Fmt.Money(Math.Abs(flow.Net - due)),
             ProjectedNegative: flow.Net - due < 0,
+            SavedLabel: Loc.T(flow.Net - due < 0 ? "Reports_ShortAfterDue" : "Reports_SavedAfterDue"),
             BeforeDueNote: Loc.F("Reports_BeforeDue", Fmt.Money(flow.Net)),
             SpendingTotal: Fmt.Money(sum.TotalSpending),
             SpendingSub: Loc.F("SpendingSub", Fmt.Money(sum.CashExpenses), Fmt.Money(sum.CardSpending)),

@@ -83,7 +83,7 @@
                         <Label Grid.Row="3" Text="{loc:Tr Budget_Planned}" />
                         <Label Grid.Row="3" Grid.Column="1" Text="{Binding Model.Planned}" FontAttributes="Bold" />
                         <BoxView Grid.Row="4" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
-                        <Label Grid.Row="5" Text="{loc:Tr Budget_Save}" FontAttributes="Bold" FontSize="17" />
+                        <Label Grid.Row="5" Text="{Binding Model.SaveLabel}" FontAttributes="Bold" FontSize="17" />
                         <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.Save}" FontAttributes="Bold" FontSize="17" TextColor="{StaticResource Primary}">
                             <Label.Triggers>
                                 <DataTrigger TargetType="Label" Binding="{Binding Model.SaveIsNegative}" Value="True">
@@ -145,7 +145,7 @@
                         <Label Grid.Row="3" Text="{Binding Model.Forecast.IncomeLabel}" Style="{StaticResource Muted}" />
                         <Label Grid.Row="3" Grid.Column="1" Text="{Binding Model.Forecast.Income}" />
                         <BoxView Grid.Row="4" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
-                        <Label Grid.Row="5" Text="{loc:Tr Budget_Save}" FontAttributes="Bold" />
+                        <Label Grid.Row="5" Text="{Binding Model.Forecast.SaveLabel}" FontAttributes="Bold" />
                         <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.Forecast.Save}" FontAttributes="Bold" />
                     </Grid>
                     <Border Style="{StaticResource Banner}" BackgroundColor="{StaticResource PrimaryTint}" IsVisible="{Binding Model.Forecast.IsOk}">

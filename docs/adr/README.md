@@ -53,6 +53,7 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0046](0046-budget-paid-checkmark.md) | A ✓ for paid items on the Budget page | Accepted |
 | [0047](0047-budget-section-totals.md) | Totals for "Payments due this month" and "Spending plan" | Accepted |
 | [0048](0048-reports-due-this-month.md) | Reports: "Due this month" is the same due as Home and Dues | Accepted |
+| [0049](0049-negative-saving-is-a-shortfall.md) | A negative saving is called a shortfall | Accepted |
 
 ## Template
 

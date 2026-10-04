@@ -310,6 +310,13 @@ internal static class Strings
 
         // ----- v3: Home (ADR 0018) -----
         ["Home_Savings"] = ("Savings this month", "এ মাসের সঞ্চয়"),
+        // ----- A negative saving is a shortfall (ADR 0049) -----
+        ["Home_Short"] = ("Short this month", "এ মাসে ঘাটতি"),
+        ["Home_ShortIn"] = ("Short in {0}", "{0}-এ ঘাটতি"),
+        ["Home_PrevShort"] = ("Short", "ঘাটতি"),
+        ["Home_AssumedShort"] = ("Expected shortfall", "সম্ভাব্য ঘাটতি"),
+        ["Budget_Short"] = ("Short", "ঘাটতি"),
+        ["Reports_ShortAfterDue"] = ("Short so far (after dues)", "এখন পর্যন্ত ঘাটতি (দেনার পরে)"),
         ["Home_SavingsSub"] = ("left after all planned payments and spending", "সব পরিকল্পিত পরিশোধ ও খরচের পরে থাকবে"),
         ["Home_Expenses"] = ("Total expenses", "মোট খরচ"),
         ["Home_Due"] = ("Due", "দেনা"),
