@@ -143,7 +143,9 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
             tap = new AsyncRelayCommand(() => payable ? Ui.Go($"{AppShell.Pay}?dueId={due.Id}") : Task.CompletedTask);
         }
 
-        return new BudgetRow(name, subtitle, Fmt.Money(line.Estimate), Fmt.Money(line.Paid), Fmt.Money(line.Left),
+        // Paid: ✓ like the Dues page's "Fully paid" (ADR 0046).
+        return new BudgetRow(name, subtitle, Fmt.Money(line.Estimate), Fmt.Money(line.Paid),
+            line.Left > 0 ? Fmt.Money(line.Left) : "✓",
             line.Left > 0 ? Display.Warn : Display.Positive, tap);
     }
 
@@ -153,12 +155,15 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
         if (line.Skipped) notes.Add(Loc.F("Budget_Skipped", Fmt.Money(line.Planned)));
         notes.Add(Loc.T(!line.InBudget ? "Budget_NotInBudget" : line.OnlyThisMonth ? "Budget_TagOnce" : "Budget_TagEvery"));
         if (line.OnCard > 0) notes.Add(Loc.F("Budget_OnCard", Fmt.Money(line.OnCard)));
+        // A budget item fully paid shows ✓ like the Dues page (ADR 0046); overspending is said in words.
+        var paid = line.InBudget && !line.Skipped && line.Estimate > 0 && line.Left <= 0;
+        if (paid && line.Left < 0) notes.Add(Loc.F("Dues_Over", Fmt.Money(-line.Left)));
 
         return new BudgetRow(
             Display.CategoryName(line.CategoryId == 0 ? null : line.CategoryId, s),
             string.Join(" · ", notes),
-            Fmt.Money(line.Estimate), Fmt.Money(line.Spent), Fmt.Money(line.Left),
-            line.Left < 0 ? Display.Warn : Display.Negative,
+            Fmt.Money(line.Estimate), Fmt.Money(line.Spent), paid ? "✓" : Fmt.Money(line.Left),
+            paid ? Display.Positive : line.Left < 0 ? Display.Warn : Display.Negative,
             new AsyncRelayCommand(() => EditLineAsync(line)),
             // Due → the Dues page, scrolled to this item's row (current month only; ADR 0024 note).
             line.InBudget && line.Left > 0 && string.CompareOrdinal(SelectedMonth, MonthKey.Of(DateTime.Today)) <= 0
