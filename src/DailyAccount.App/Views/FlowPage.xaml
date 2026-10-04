@@ -14,7 +14,8 @@
     <ScrollView>
         <VerticalStackLayout Padding="20" Spacing="14">
 
-            <Grid ColumnDefinitions="Auto,*,Auto">
+            <Label Text="{Binding Title}" Style="{StaticResource H2}" IsVisible="{Binding IsBill}" />
+            <Grid ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding ShowMonthNav}">
                 <ImageButton Source="chevron_left.png" Command="{Binding PreviousCommand}" WidthRequest="44" HeightRequest="44" Padding="10" CornerRadius="22"
                              BackgroundColor="{StaticResource Surface}" BorderColor="{StaticResource Line}" BorderWidth="1" SemanticProperties.Description="Previous month" />
                 <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center">

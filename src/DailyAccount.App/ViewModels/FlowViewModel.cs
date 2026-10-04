@@ -24,6 +24,8 @@ public sealed record FlowRow(string Title, string Subtitle, string Amount, IComm
 public sealed partial class FlowViewModel(FinanceService finance, MonthState months) : ViewModelBase, IQueryAttributable
 {
     private string _kind = "in";
+    private int? _dueId; // kind=bill: the card statement whose purchases are listed (ADR 0039)
+    private string? _billMonth;
 
     [ObservableProperty] private string _title = "";
     [ObservableProperty] private string _monthTitle = "";
@@ -31,10 +33,16 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
     [ObservableProperty] private List<FlowRow> _rows = [];
     [ObservableProperty] private string _total = "";
     [ObservableProperty] private bool _isEmpty;
+    /// <summary>‹ › only for a month's lists; a bill's purchases belong to that bill.</summary>
+    [ObservableProperty] private bool _showMonthNav = true;
+    public bool IsBill => !ShowMonthNav;
+    partial void OnShowMonthNavChanged(bool value) => OnPropertyChanged(nameof(IsBill));
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         if (query.TryGetValue("kind", out var k) && k?.ToString() is { } kind) _kind = kind;
+        if (query.TryGetValue("dueId", out var d) && int.TryParse(d?.ToString(), out var dueId)) _dueId = dueId;
+        if (query.TryGetValue("month", out var m) && m?.ToString() is { Length: 7 } paidIn) _billMonth = paidIn;
     }
 
     public override async Task LoadAsync()
@@ -46,6 +54,21 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
 
         switch (_kind)
         {
+            case "bill" when s.Dues.FirstOrDefault(x => x.Id == _dueId) is { } statement:
+                // The purchases a card bill is made of (ADR 0039).
+                ShowMonthNav = false;
+                var purchases = s.StatementPurchases(statement);
+                var card = s.Cards.FirstOrDefault(c => c.Id == statement.SourceId)?.Name ?? "";
+                var cycle = purchases.FirstOrDefault()?.Date ?? DateTime.Today;
+                Title = Loc.F("Flow_CardPurchases", card, Fmt.MonthName(MonthKey.Of(cycle)));
+                MonthTitle = Title;
+                Hint = Loc.F("Flow_BillHint", Fmt.Month(_billMonth ?? statement.DueMonth), Fmt.Money(statement.PaidAmount), Fmt.Money(statement.Amount));
+                Rows = purchases.Select(t => new FlowRow(
+                    t.ItemName ?? t.Note ?? Display.CategoryName(t.CategoryId, s),
+                    Fmt.Date(t.Date) + " · " + Display.CategoryName(t.CategoryId, s),
+                    Fmt.Money(t.Amount))).ToList();
+                Total = Fmt.Money(purchases.Sum(t => t.Amount));
+                break;
             case "dues":
                 Title = Loc.T("DuesPaid");
                 Hint = Loc.T("Flow_DuesHint");
@@ -98,6 +121,7 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
     {
         var due = line.Due;
         string title;
+        System.Windows.Input.ICommand? tap = null; // a card bill opens its purchases (ADR 0039)
         switch (due.SourceType)
         {
             case DueSource.Loan when s.Loans.FirstOrDefault(l => l.Id == due.SourceId) is { } loan:
@@ -109,6 +133,7 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
                                      && DateTime.TryParse(due.PeriodKey, System.Globalization.CultureInfo.InvariantCulture,
                                          System.Globalization.DateTimeStyles.None, out var cycle):
                 title = Loc.F("Flow_CardPurchases", c.Name, Fmt.MonthName(MonthKey.Of(cycle)));
+                tap = new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=bill&dueId={due.Id}&month={MonthKey.Of(line.LastDate)}"));
                 break;
             case DueSource.Personal:
                 title = Loc.F("Flow_Repaid", due.Title);
@@ -120,7 +145,7 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
         var from = Display.AccountName(line.AccountId, s);
         var sub = Fmt.Date(line.LastDate) + (from.Length > 0 ? " · " + Loc.F("Flow_From", from) : "")
                   + (line.Amount < due.Amount ? " · " + Loc.F("Flow_PartOf", Fmt.Money(due.Amount)) : "");
-        return new FlowRow(title, sub, Fmt.Money(line.Amount));
+        return new FlowRow(title, sub, Fmt.Money(line.Amount), tap);
     }
 
     [RelayCommand]

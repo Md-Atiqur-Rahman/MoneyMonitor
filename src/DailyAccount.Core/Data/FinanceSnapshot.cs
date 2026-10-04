@@ -232,6 +232,19 @@ public sealed record FinanceSnapshot(
     }
 
     /// <summary>
+    /// The purchases a card statement is made of (ADR 0039): those of its cycle, oldest first. Reports → Cash flow
+    /// → Loan &amp; Credit Card Paid → "Card · September purchases" opens them.
+    /// </summary>
+    public List<Transaction> StatementPurchases(Due statement)
+    {
+        if (statement.SourceType != DueSource.Card || Cards.FirstOrDefault(c => c.Id == statement.SourceId) is not { } card) return [];
+        return Transactions
+            .Where(t => t.Type == TransactionType.CardPurchase && t.CardId == card.Id
+                        && Key(LiabilityEngine.CycleStart(card, t.Date)) == statement.PeriodKey)
+            .OrderBy(t => t.Date).ThenBy(t => t.Id).ToList();
+    }
+
+    /// <summary>
     /// Card purchases of the month before the one running on <paramref name="day"/> — Liabilities → Last month
     /// (ADR 0037): only that one cycle, not every earlier one.
     /// </summary>

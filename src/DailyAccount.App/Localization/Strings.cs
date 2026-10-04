@@ -216,7 +216,7 @@ internal static class Strings
         ["Reports_Title"] = ("Report", "রিপোর্ট"),
         ["CashFlow"] = ("Cash flow", "নগদ প্রবাহ"),
         ["CashFlowSub"] = ("Real money in and out of your accounts", "অ্যাকাউন্টে আসা ও যাওয়া আসল টাকা"),
-        ["DuesPaid"] = ("Dues paid", "পরিশোধিত দেনা"),
+        ["DuesPaid"] = ("Loan & Credit Card Paid", "লোন ও ক্রেডিট কার্ড পরিশোধ"),
         ["CashExpenses"] = ("Cash expenses", "নগদ খরচ"),
         ["DuesStill"] = ("Dues still to pay", "বাকি দেনা"),
         ["ProjectedSavings"] = ("Projected savings", "সম্ভাব্য সঞ্চয়"),
@@ -390,7 +390,8 @@ internal static class Strings
         // ----- Cash flow details (ADR 0032) -----
         ["Flow_MoneyIn"] = ("Money in", "আয় ও জমা"),
         ["Flow_InHint"] = ("Everything that came into your accounts this month: income, money borrowed and money returned to you.", "এ মাসে অ্যাকাউন্টে যা এসেছে: আয়, ধার নেওয়া টাকা এবং ফেরত পাওয়া টাকা।"),
-        ["Flow_DuesHint"] = ("Card bills, installments and repayments paid this month.", "এ মাসে পরিশোধ করা কার্ড বিল, কিস্তি ও ধার ফেরত।"),
+        ["Flow_DuesHint"] = ("Card bills, loan installments and repayments paid this month. Tap a card bill to see its purchases.", "এ মাসে পরিশোধ করা কার্ড বিল, লোনের কিস্তি ও ধার ফেরত। কার্ড বিলে চাপলে কেনাকাটাগুলো দেখা যাবে।"),
+        ["Flow_BillHint"] = ("The purchases on this card bill, paid in {0}: {1} of {2}.", "এই কার্ড বিলের কেনাকাটা, {0}-এ পরিশোধ: {2}-এর মধ্যে {1}।"),
         ["Flow_SpentHint"] = ("Paid in cash or from the bank this month, by category. Tap one to see its items.", "এ মাসে নগদ বা ব্যাংক থেকে খরচ, ক্যাটাগরি অনুযায়ী। আইটেম দেখতে চাপুন।"),
         ["Flow_BorrowedFrom"] = ("Borrowed from {0}", "{0}-এর কাছ থেকে ধার"),
         ["Flow_BorrowedNote"] = ("to pay back · see Liabilities → Personal", "ফেরত দিতে হবে · দায় → ব্যক্তিগত দেখুন"),

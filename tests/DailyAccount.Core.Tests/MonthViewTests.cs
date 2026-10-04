@@ -270,4 +270,20 @@ public sealed class MonthViewTests : IAsyncLifetime
         Assert.Equal(Tk(10_000), last.Sum(t => t.Amount));
         Assert.Equal(Tk(500), s.LastCyclePurchases(card, new DateTime(2026, 9, 30)).Sum(t => t.Amount)); // from September: August
     }
+
+    [Fact]
+    public async Task A_card_statement_lists_the_purchases_it_is_made_of()
+    {
+        var (_, card, _) = await SeptemberAsync(); // 10,000 on 20 Sept → the 1 Oct statement
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(500), Date = new DateTime(2026, 9, 2) });
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(700), Date = new DateTime(2026, 10, 2) });
+        await _svc.GenerateDuesAsync(new DateTime(2026, 10, 3));
+        var s = await _svc.LoadAsync();
+
+        var statement = s.Dues.Single(d => d.SourceType == DueSource.Card && d.DueMonth == "2026-10");
+        var purchases = s.StatementPurchases(statement);
+        Assert.Equal([Tk(500), Tk(10_000)], purchases.Select(t => t.Amount)); // September's two, oldest first
+        Assert.Equal(statement.Amount, purchases.Sum(t => t.Amount));
+        Assert.Empty(s.StatementPurchases(s.Dues.First(d => d.SourceType == DueSource.Loan)));
+    }
 }
