@@ -28,6 +28,20 @@ public sealed record LoanInMonth(int PaidCount, long PaidAmount, long Remaining,
     public bool ShowsIn => Remaining > 0 || Installment is not null;
 }
 
+/// <summary>One step of a personal debt (ADR 0040): the money given, or a part paid back.</summary>
+public sealed record DebtStep(DateTime Date, long Amount, bool IsGiven, int? AccountId, int? CardId);
+
+/// <summary>
+/// A personal debt in full (ADR 0040): lent to someone or borrowed from someone, how much has come / gone back,
+/// what is left, and every step with its date.
+/// </summary>
+public sealed record DebtLedger(PersonalDebt Debt, long Total, long PaidBack, List<DebtStep> Steps)
+{
+    public long Left => Math.Max(0, Total - PaidBack);
+    public bool IsFullyPaid => Left == 0;
+    public DateTime? LastPayment => Steps.Where(x => !x.IsGiven).Select(x => (DateTime?)x.Date).DefaultIfEmpty(null).Max();
+}
+
 /// <summary>A card's payment of one month (ADR 0037): everything due on it, what was paid, and when.</summary>
 public sealed record CardMonthBill(long Billed, long Paid, DateTime? PaidOn, List<Due> Dues)
 {
@@ -56,6 +70,42 @@ public sealed record FinanceSnapshot(
     List<SalaryRate>? SalaryRates = null,
     List<CardSubscription>? Subscriptions = null)
 {
+    /// <summary>
+    /// Everything about one personal debt (ADR 0040). Lent: given = the money out (cash/bank or card), paid back =
+    /// "money returned". Borrowed: given = the money in, paid back = repayments of its due.
+    /// </summary>
+    public DebtLedger Ledger(PersonalDebt debt)
+    {
+        var steps = new List<DebtStep>();
+        if (debt.Direction == DebtDirection.Lent)
+        {
+            steps.AddRange(Transactions
+                .Where(t => t.DebtId == debt.Id && t.Type is TransactionType.LendOut or TransactionType.CardPurchase)
+                .Select(t => new DebtStep(t.Date, t.Amount, true, t.AccountId, t.CardId)));
+            steps.AddRange(Transactions
+                .Where(t => t.DebtId == debt.Id && t.Type == TransactionType.LendReturn)
+                .Select(t => new DebtStep(t.Date, t.Amount, false, t.AccountId, null)));
+        }
+        else
+        {
+            steps.AddRange(Transactions
+                .Where(t => t.DebtId == debt.Id && t.Type == TransactionType.BorrowIn)
+                .Select(t => new DebtStep(t.Date, t.Amount, true, t.AccountId, null)));
+            var due = DueFor(DueSource.Personal, debt.Id);
+            steps.AddRange(Transactions
+                .Where(t => due is not null && t.DueId == due.Id && t.Type == TransactionType.DuePayment)
+                .Select(t => new DebtStep(t.Date, t.Amount, false, t.AccountId, null)));
+        }
+        // A debt recorded without an account (borrowed in hand) has no money-in entry: its date still counts.
+        if (!steps.Any(x => x.IsGiven)) steps.Add(new DebtStep(debt.Date, debt.Amount, true, debt.AccountId, debt.CardId));
+        steps = [.. steps.OrderBy(x => x.Date).ThenBy(x => !x.IsGiven)];
+        return new DebtLedger(debt, debt.Amount, steps.Where(x => !x.IsGiven).Sum(x => x.Amount), steps);
+    }
+
+    /// <summary>All personal debts, still open first, then the newest (Reports → Lent &amp; borrowed).</summary>
+    public List<DebtLedger> Ledgers() =>
+        [.. Debts.Select(Ledger).OrderBy(l => l.IsFullyPaid).ThenByDescending(l => l.Debt.Date)];
+
     /// <summary>The salary rate that applies in <paramref name="month"/>, if any (ADR 0035).</summary>
     public SalaryRate? SalaryRateIn(string month) =>
         (SalaryRates ?? []).Where(r => string.CompareOrdinal(r.FromMonth, month) <= 0)

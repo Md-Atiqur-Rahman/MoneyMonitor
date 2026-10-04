@@ -120,6 +120,8 @@ public class PersonalDebt
     public DateTime Date { get; set; }
     public DateTime? ExpectedReturnDate { get; set; }
     public int? AccountId { get; set; }
+    /// <summary>Lent through a credit card (ADR 0040): it is on that card's bill, not spending of one's own.</summary>
+    public int? CardId { get; set; }
     public string? Note { get; set; }
 }
 

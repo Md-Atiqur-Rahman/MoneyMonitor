@@ -103,6 +103,12 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Lend: paid with a credit card (ADR 0040) -->
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding ShowLendByCard}">
+                <Label Text="{loc:Tr Lend_ByCard}" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding LendByCard}" />
+            </Grid>
+
             <!-- Card -->
             <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowCard}">
                 <Label Text="{loc:Tr Card}" Style="{StaticResource Caption}" />
@@ -128,7 +134,7 @@
             </VerticalStackLayout>
 
             <!-- Date -->
-            <VerticalStackLayout Spacing="6">
+            <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowDate}">
                 <Label Text="{loc:Tr Date}" Style="{StaticResource Caption}" />
                 <Border Style="{StaticResource Field}">
                     <DatePicker Date="{Binding Date}" Format="d MMM yyyy" />

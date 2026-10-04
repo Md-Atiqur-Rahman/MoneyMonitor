@@ -44,6 +44,8 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0037](0037-liabilities-paid-amounts-running-loans-last-month.md) | Liabilities: paid amounts shown, only running loans, last month = one month | Accepted |
 | [0038](0038-monthly-card-payments-added-automatically.md) | Monthly card payments (subscriptions), added automatically | Accepted |
 | [0039](0039-loan-and-card-paid-with-bill-purchases.md) | "Loan & Credit Card Paid", and a card bill opens its purchases | Accepted |
+| [0040](0040-lending-by-card-and-who-owes-what.md) | Lending through a card, and who owes what | Accepted |
+| [0041](0041-entry-that-was-lending-becomes-a-debt.md) | An entry that was really lending or borrowing becomes a personal debt | Accepted |
 
 ## Template
 

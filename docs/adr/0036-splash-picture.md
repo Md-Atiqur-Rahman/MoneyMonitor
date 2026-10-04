@@ -3,6 +3,9 @@
 - Status: Accepted
 - Date: 2026-10-03
 
+> **Amended 2026-10-04 (user request):** the title inside the app (top of Home, title of every dialog) is
+> **মাসিক হিসাব** too, in English and Bangla mode (`AppName`).
+
 ## Context
 The user wants a photo of ৳1000 notes (`docs/money.png`, 633×462) shown when the app opens. It is a
 **watermarked stock image** (pngtree), fine on the user's own phone but not to be published in the repo.

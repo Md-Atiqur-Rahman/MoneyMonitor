@@ -20,11 +20,16 @@
         </Style>
 
         <DataTemplate x:Key="DebtTemplate" x:DataType="vm:DebtRow">
-            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Padding="0,10" RowSpacing="6">
-                <Label Text="{Binding Name}" FontAttributes="Bold" />
-                <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+            <!-- Tap the text for every step with dates (ADR 0040) -->
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" Padding="0,10" RowSpacing="4">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding Open}" />
+                </Grid.GestureRecognizers>
+                <Label Text="{Binding Name}" FontAttributes="Bold" TextDecorations="Underline" />
                 <Label Grid.Column="1" Text="{Binding Remaining}" TextColor="{Binding RemainingColor}" Style="{StaticResource Amount}" HorizontalOptions="End" />
-                <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="6" HorizontalOptions="End">
+                <Label Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                <Label Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding Progress}" FontSize="13" IsVisible="{Binding HasProgress}" />
+                <HorizontalStackLayout Grid.Row="3" Grid.ColumnSpan="2" Spacing="6" HorizontalOptions="End">
                     <Button Text="{Binding SecondText}" Command="{Binding Second}" IsVisible="{Binding HasSecond}" Style="{StaticResource SmallOutline}" />
                     <Button Text="{Binding ActionText}" Command="{Binding Action}" IsVisible="{Binding CanAct}" Style="{StaticResource Small}" />
                 </HorizontalStackLayout>

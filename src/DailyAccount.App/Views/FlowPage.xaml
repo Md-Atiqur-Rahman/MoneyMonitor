@@ -48,7 +48,7 @@
                     <Label Text="{loc:Tr Entries_Empty}" Style="{StaticResource Muted}" IsVisible="{Binding IsEmpty}" Padding="0,10" />
                     <BoxView Style="{StaticResource Divider}" Margin="0,4" />
                     <Grid ColumnDefinitions="*,Auto" Padding="0,10">
-                        <Label Text="{loc:Tr Card_NextTotal}" FontAttributes="Bold" FontSize="17" />
+                        <Label Text="{Binding TotalLabel}" FontAttributes="Bold" FontSize="17" />
                         <Label Grid.Column="1" Text="{Binding Total}" FontAttributes="Bold" FontSize="20" />
                     </Grid>
                 </VerticalStackLayout>

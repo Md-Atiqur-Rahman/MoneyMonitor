@@ -49,8 +49,10 @@ public sealed record PurchaseGroup(string Title, string Subtitle, string Total, 
 
 /// <summary>A borrowing or lending; <paramref name="Second"/> is "Change month" for borrowing (ADR 0030).</summary>
 public sealed record DebtRow(string Name, string Subtitle, string Remaining, Color RemainingColor, string ActionText, ICommand? Action,
-    string SecondText = "", ICommand? Second = null)
+    string SecondText = "", ICommand? Second = null, string Progress = "", ICommand? Open = null)
 {
+    /// <summary>"Paid back ৳3,000 of ৳5,000 · left ৳2,000" / "Fully paid on 9 Oct" (ADR 0040).</summary>
+    public bool HasProgress => Progress.Length > 0;
     public bool CanAct => Action is not null;
     public bool HasSecond => Second is not null;
 }
@@ -168,17 +170,23 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance, MonthSt
                 Loc.T("Repay"),
                 payable ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.Pay}?dueId={due!.Id}")) : null,
                 Loc.T("Debt_ChangeMonth"),
-                left > 0 ? new AsyncRelayCommand(() => ChangePayMonthAsync(d, payMonth)) : null);
+                left > 0 ? new AsyncRelayCommand(() => ChangePayMonthAsync(d, payMonth)) : null,
+                Display.DebtProgress(s.Ledger(d)),
+                new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=debt&debtId={d.Id}")));
         }).ToList();
 
         Lent = s.Debts.Where(d => d.Direction == DebtDirection.Lent && d.Date.Date <= today).Select(d =>
         {
             var left = s.LendRemaining(d);
+            var how = d.CardId is { } cardId ? Loc.F("Debt_ByCard", s.Cards.FirstOrDefault(c => c.Id == cardId)?.Name ?? "")
+                : Display.AccountName(d.AccountId, s);
             return new DebtRow(d.PersonName,
-                Loc.F("Debt_LentSub", Fmt.Money(d.Amount), Fmt.Date(d.Date)),
+                Loc.F("Debt_LentSub", Fmt.Money(d.Amount), Fmt.Date(d.Date)) + (how.Length > 0 ? " · " + how : ""),
                 left > 0 ? Fmt.Money(left) : Loc.T("Debt_Settled"), Display.Positive,
                 Loc.T("MoneyReturned"),
-                left > 0 ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.Pay}?debtId={d.Id}")) : null);
+                left > 0 ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.Pay}?debtId={d.Id}")) : null,
+                Progress: Display.DebtProgress(s.Ledger(d)),
+                Open: new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=debt&debtId={d.Id}")));
         }).ToList();
 
         Subscriptions = (s.Subscriptions ?? []).OrderBy(x => x.StopMonth is not null).ThenBy(x => x.Name).Select(x =>

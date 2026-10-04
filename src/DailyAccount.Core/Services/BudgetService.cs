@@ -82,7 +82,7 @@ public static class BudgetService
 
         var spent = inMonth.Where(t => t.Type == TransactionType.Expense)
             .GroupBy(t => Top(t.CategoryId)).ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
-        var onCard = inMonth.Where(t => t.Type == TransactionType.CardPurchase)
+        var onCard = inMonth.Where(t => t.Type == TransactionType.CardPurchase && t.IsSpending())
             .GroupBy(t => Top(t.CategoryId)).ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
 
         var monthBudget = budget.Where(b => b.Month == month).ToList();

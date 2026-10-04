@@ -174,6 +174,14 @@ public static class Display
     public static Dictionary<string, string> MonthOptions(DateTime from) =>
         PayMonthOptions(from).Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value!);
 
+    /// <summary>"Paid back ৳3,000 of ৳5,000 · left ৳2,000", "Fully paid · last on 9 Oct" (ADR 0040).</summary>
+    public static string DebtProgress(DebtLedger l) => l.IsFullyPaid
+        ? Loc.T("Debt_FullyPaid") + (l.LastPayment is { } on ? " · " + Loc.F("Debt_LastOn", Fmt.DayMonth(on)) : "")
+        : l.PaidBack == 0
+            ? Loc.T(l.Debt.Direction == DebtDirection.Lent ? "Debt_NothingBackYet" : "Debt_NothingRepaidYet")
+            : Loc.F(l.Debt.Direction == DebtDirection.Lent ? "Debt_BackOf" : "Debt_RepaidOf",
+                Fmt.Money(l.PaidBack), Fmt.Money(l.Total), Fmt.Money(l.Left));
+
     public static string AccountName(int? accountId, FinanceSnapshot s) =>
         s.Accounts.FirstOrDefault(a => a.Id == accountId)?.Name ?? "";
 

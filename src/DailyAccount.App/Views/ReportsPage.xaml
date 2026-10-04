@@ -27,6 +27,8 @@
 
             <!-- All entries of this month: edit / delete (ADR 0026) -->
             <Button Text="{loc:Tr Entries_Open}" Command="{Binding OpenEntriesCommand}" Style="{StaticResource Outline}" />
+            <!-- Who owes what (ADR 0040) -->
+            <Button Text="{loc:Tr People_Open}" Command="{Binding OpenPeopleCommand}" Style="{StaticResource Outline}" />
 
             <!-- Cash flow -->
             <Border Style="{StaticResource Card}">

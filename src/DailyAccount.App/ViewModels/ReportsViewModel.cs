@@ -99,6 +99,10 @@ public sealed partial class ReportsViewModel(FinanceService finance, MonthState 
     [RelayCommand]
     private Task OpenFlow(string kind) => Ui.Go($"{AppShell.Flow}?kind={kind}");
 
+    /// <summary>Who owes what: every lend and borrow with what is paid back and left (ADR 0040).</summary>
+    [RelayCommand]
+    private Task OpenPeople() => Ui.Go($"{AppShell.Flow}?kind=people");
+
     [RelayCommand]
     private Task OpenEntries() => Services.Ui.Go($"{AppShell.Entries}?month={SelectedMonth}");
 

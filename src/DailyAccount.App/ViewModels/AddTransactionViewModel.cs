@@ -200,8 +200,11 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     public bool ShowItemSwitch => CanUseItems;
 
     /// <summary>All six types when adding; in edit mode the four an entry can be (no Borrow/Lend).</summary>
+    /// <remarks>ADR 0041: an expense or card purchase can become a Lend, an income a Borrow.</remarks>
     public List<ChipOption> VisibleTypes => IsEditing
-        ? Types.Where(t => t.Key is "income" or "expense" or "card" or "transfer").ToList()
+        ? Types.Where(t => t.Key is "income" or "expense" or "card" or "transfer"
+                           || (t.Key == "lend" && _editing?.Type is TransactionType.Expense or TransactionType.CardPurchase)
+                           || (t.Key == "borrow" && _editing?.Type == TransactionType.Income)).ToList()
         : Types;
 
     partial void OnIsEditingChanged(bool value)
@@ -217,12 +220,34 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     [ObservableProperty] private bool _showPerson;
     [ObservableProperty] private bool _showReturnDate;
 
+    /// <summary>Lend: paid with a credit card instead of from an account (ADR 0040).</summary>
+    [ObservableProperty] private bool _lendByCard;
+    [ObservableProperty] private bool _showLendByCard;
+
+    partial void OnLendByCardChanged(bool value) => UpdatePaidWith();
+
+    private void UpdatePaidWith()
+    {
+        var byCard = _type == "lend" && LendByCard;
+        ShowCard = _type == "card" || byCard;
+        ShowAccount = _type != "card" && !byCard;
+        // Turning an entry into a lend/borrow (ADR 0041): its own amount, date and account/card are used, so
+        // those boxes are hidden; the hint names them instead.
+        if (Converting) ShowCard = ShowAccount = false;
+        OnPropertyChanged(nameof(ShowAmount));
+        OnPropertyChanged(nameof(ShowDate));
+    }
+
+    /// <summary>Edit mode, Lend or Borrow chosen: the entry becomes a personal debt (ADR 0041).</summary>
+    private bool Converting => IsEditing && _type is "borrow" or "lend";
+    public bool ShowDate => !Converting;
+
     /// <summary>Item-by-item entry is offered for Expense and Card purchase.</summary>
     [ObservableProperty] private bool _canUseItems;
     [ObservableProperty] private bool _useItems;
     [ObservableProperty] private string _itemsTotal = "";
 
-    public bool ShowAmount => !(CanUseItems && UseItems);
+    public bool ShowAmount => !(CanUseItems && UseItems) && !Converting;
     public bool ShowItems => CanUseItems && UseItems;
 
     partial void OnUseItemsChanged(bool value)
@@ -364,10 +389,17 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
             "lend" => "Hint_Lend",
             _ => "Hint_Expense"
         });
+        if (Converting && _editing is { } entry)
+        {
+            var how = entry.CardId is { } cardId && _snapshot is not null
+                ? _snapshot.Cards.FirstOrDefault(c => c.Id == cardId)?.Name ?? ""
+                : _snapshot is not null ? Display.AccountName(entry.AccountId, _snapshot) : "";
+            Hint = Loc.F("Hint_ConvertToDebtOf", Fmt.Money(entry.Amount), Fmt.Date(entry.Date), how);
+        }
 
         ShowCategory = _type is "income" or "expense" or "card";
-        ShowCard = _type == "card";
-        ShowAccount = _type != "card";
+        ShowLendByCard = _type == "lend" && Cards.Count > 0 && !IsEditing; // editing: the entry decides
+        UpdatePaidWith();
         ShowToAccount = _type == "transfer";
         ShowPerson = _type is "borrow" or "lend";
         ShowReturnDate = _type == "borrow";
@@ -507,7 +539,20 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
 
         var ok = await Ui.Try(async () =>
         {
-            if (_editing is not null)
+            if (_editing is not null && _type is "borrow" or "lend")
+            {
+                // It was really lending/borrowing (ADR 0041): amount, date and account or card stay as entered.
+                await _finance.ConvertToDebtAsync(_editing.Id, new PersonalDebt
+                {
+                    PersonName = PersonName,
+                    Direction = _type == "borrow" ? DebtDirection.Borrowed : DebtDirection.Lent,
+                    ExpectedReturnDate = _type == "borrow" && SelectedPayMonth is { } epm && _payMonthKeys.ElementAtOrDefault(epm.Id) is { } eMonth
+                        ? Core.MonthKey.LastDay(eMonth)
+                        : null,
+                    Note = note
+                });
+            }
+            else if (_editing is not null)
             {
                 // Edit: one entry, from the amount box or the single item line (ADR 0026).
                 var line = Lines.FirstOrDefault();
@@ -528,7 +573,8 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
                     ExpectedReturnDate = _type == "borrow" && SelectedPayMonth is { } pm && _payMonthKeys.ElementAtOrDefault(pm.Id) is { } payMonth
                         ? Core.MonthKey.LastDay(payMonth)
                         : null,
-                    AccountId = SelectedAccount?.Id,
+                    AccountId = _type == "lend" && LendByCard ? null : SelectedAccount?.Id,
+                    CardId = _type == "lend" && LendByCard ? SelectedCard?.Id : null,
                     Note = note
                 });
             }

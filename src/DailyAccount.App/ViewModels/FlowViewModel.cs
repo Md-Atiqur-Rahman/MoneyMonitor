@@ -25,6 +25,7 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
 {
     private string _kind = "in";
     private int? _dueId; // kind=bill: the card statement whose purchases are listed (ADR 0039)
+    private int? _debtId; // kind=debt: one personal debt, step by step (ADR 0040)
     private string? _billMonth;
 
     [ObservableProperty] private string _title = "";
@@ -36,12 +37,15 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
     /// <summary>‹ › only for a month's lists; a bill's purchases belong to that bill.</summary>
     [ObservableProperty] private bool _showMonthNav = true;
     public bool IsBill => !ShowMonthNav;
+    /// <summary>The label of the bottom line: "Total", "Left", "Owed to you" (ADR 0040).</summary>
+    [ObservableProperty] private string _totalLabel = Loc.T("Card_NextTotal");
     partial void OnShowMonthNavChanged(bool value) => OnPropertyChanged(nameof(IsBill));
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         if (query.TryGetValue("kind", out var k) && k?.ToString() is { } kind) _kind = kind;
         if (query.TryGetValue("dueId", out var d) && int.TryParse(d?.ToString(), out var dueId)) _dueId = dueId;
+        if (query.TryGetValue("debtId", out var b) && int.TryParse(b?.ToString(), out var debtId)) _debtId = debtId;
         if (query.TryGetValue("month", out var m) && m?.ToString() is { Length: 7 } paidIn) _billMonth = paidIn;
     }
 
@@ -54,6 +58,43 @@ public sealed partial class FlowViewModel(FinanceService finance, MonthState mon
 
         switch (_kind)
         {
+            case "people":
+            {
+                // Reports → Lent & borrowed (ADR 0040): every person, open ones first; all time, not one month.
+                ShowMonthNav = false;
+                var ledgers = s.Ledgers();
+                Title = Loc.T("People_Title");
+                MonthTitle = Title;
+                var owedToMe = ledgers.Where(l => l.Debt.Direction == DebtDirection.Lent).Sum(l => l.Left);
+                var iOwe = ledgers.Where(l => l.Debt.Direction == DebtDirection.Borrowed).Sum(l => l.Left);
+                Hint = Loc.F("People_Hint", Fmt.Money(owedToMe), Fmt.Money(iOwe));
+                Rows = ledgers.Select(l => new FlowRow(
+                    Loc.F(l.Debt.Direction == DebtDirection.Lent ? "People_Lent" : "People_Borrowed", l.Debt.PersonName, Fmt.Money(l.Total)),
+                    Fmt.Date(l.Debt.Date) + " · " + Display.DebtProgress(l),
+                    l.IsFullyPaid ? "✓" : Fmt.Money(l.Left),
+                    new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=debt&debtId={l.Debt.Id}")))).ToList();
+                TotalLabel = Loc.T("People_OwedToYou");
+                Total = Fmt.Money(owedToMe);
+                break;
+            }
+            case "debt" when s.Debts.FirstOrDefault(x => x.Id == _debtId) is { } debt:
+            {
+                // One person's debt, step by step: given, each repayment, what is left.
+                ShowMonthNav = false;
+                var l = s.Ledger(debt);
+                var lent = debt.Direction == DebtDirection.Lent;
+                Title = Loc.F(lent ? "People_LentTitle" : "People_BorrowedTitle", debt.PersonName);
+                MonthTitle = Title;
+                Hint = Display.DebtProgress(l);
+                Rows = l.Steps.Select(x => new FlowRow(
+                    Loc.T(x.IsGiven ? (lent ? "Step_Lent" : "Step_Borrowed") : (lent ? "Step_GotBack" : "Step_Repaid")),
+                    Fmt.Date(x.Date) + (x.CardId is { } c ? " · " + Loc.F("Debt_ByCard", s.Cards.FirstOrDefault(k => k.Id == c)?.Name ?? "")
+                        : Display.AccountName(x.AccountId, s) is { Length: > 0 } a ? " · " + a : ""),
+                    (x.IsGiven ? "" : "−") + Fmt.Money(x.Amount))).ToList();
+                TotalLabel = Loc.T(l.IsFullyPaid ? "Debt_FullyPaid" : "People_Left");
+                Total = l.IsFullyPaid ? "✓" : Fmt.Money(l.Left);
+                break;
+            }
             case "bill" when s.Dues.FirstOrDefault(x => x.Id == _dueId) is { } statement:
                 // The purchases a card bill is made of (ADR 0039).
                 ShowMonthNav = false;

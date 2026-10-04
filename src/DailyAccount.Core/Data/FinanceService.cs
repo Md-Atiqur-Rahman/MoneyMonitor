@@ -290,7 +290,7 @@ public sealed class FinanceService(FinanceDatabase database)
         // The kind may change between these four (e.g. an expense that was really a card purchase).
         static bool Editable(TransactionType t) => t is TransactionType.Income or TransactionType.Expense
             or TransactionType.Transfer or TransactionType.CardPurchase;
-        if (!Editable(existing.Type) || !Editable(updated.Type))
+        if (!Editable(existing.Type) || !Editable(updated.Type) || existing.DebtId is not null)
             throw new FinanceException("Err_EditNotAllowed");
         Validate(updated);
 
@@ -356,6 +356,8 @@ public sealed class FinanceService(FinanceDatabase database)
     {
         var s = await LoadAsync();
         var t = s.Transactions.FirstOrDefault(x => x.Id == transactionId) ?? throw new FinanceException("Err_NotFound");
+        // Money lent through a card belongs to the person's record (ADR 0040).
+        if (t.Type == TransactionType.CardPurchase && t.DebtId is not null) throw new FinanceException("Err_DeleteDebtTx");
 
         switch (t.Type)
         {
@@ -874,7 +876,9 @@ public sealed class FinanceService(FinanceDatabase database)
         await database.InitAsync();
         if (string.IsNullOrWhiteSpace(debt.PersonName)) throw new FinanceException("Err_Name");
         if (debt.Amount <= 0) throw new FinanceException("Err_Amount");
-        if (debt.Direction == DebtDirection.Lent && debt.AccountId is null) throw new FinanceException("Err_Account");
+        if (debt.Direction == DebtDirection.Lent && debt.AccountId is null && debt.CardId is null) throw new FinanceException("Err_Account");
+        if (debt.Direction == DebtDirection.Borrowed) debt.CardId = null;
+        if (debt.CardId is not null) debt.AccountId = null; // lent through a card (ADR 0040)
         debt.PersonName = debt.PersonName.Trim();
 
         await Db.RunInTransactionAsync(c =>
@@ -892,9 +896,68 @@ public sealed class FinanceService(FinanceDatabase database)
                     Note = debt.Note ?? debt.PersonName
                 });
             }
+            if (debt.CardId is not null)
+                c.Insert(new Transaction
+                {
+                    Date = debt.Date, Amount = debt.Amount, Type = TransactionType.CardPurchase,
+                    CardId = debt.CardId, DebtId = debt.Id, ItemName = debt.PersonName, Note = debt.Note ?? "Lent"
+                });
             if (debt.Direction == DebtDirection.Borrowed)
                 c.Insert(LiabilityEngine.BuildPersonalDue(debt));
         });
+    }
+
+    /// <summary>
+    /// Turns an entry that was really lending or borrowing into a personal debt (ADR 0041), e.g. an expense
+    /// "৳5,000" in a category made for it that was money lent to a brother:
+    /// - an expense → lent from the same account, same amount and date (the expense is replaced);
+    /// - a card purchase → lent through that card: the same purchase is kept, so its card bill doesn't change;
+    /// - an income → borrowed into the same account.
+    /// Name, note and pay-back date come from <paramref name="debt"/>; amount/date/account from the entry.
+    /// </summary>
+    public async Task<PersonalDebt> ConvertToDebtAsync(int transactionId, PersonalDebt debt)
+    {
+        var s = await LoadAsync();
+        var t = s.Transactions.FirstOrDefault(x => x.Id == transactionId) ?? throw new FinanceException("Err_NotFound");
+        if (string.IsNullOrWhiteSpace(debt.PersonName)) throw new FinanceException("Err_Name");
+        var allowed = debt.Direction == DebtDirection.Lent
+            ? t.Type is TransactionType.Expense or TransactionType.CardPurchase
+            : t.Type == TransactionType.Income;
+        if (!allowed || t.DebtId is not null) throw new FinanceException("Err_ConvertNotAllowed");
+
+        debt.PersonName = debt.PersonName.Trim();
+        debt.Amount = t.Amount;
+        debt.Date = t.Date;
+        debt.AccountId = t.Type == TransactionType.CardPurchase ? null : t.AccountId;
+        debt.CardId = t.Type == TransactionType.CardPurchase ? t.CardId : null;
+
+        await Db.RunInTransactionAsync(c =>
+        {
+            c.Insert(debt);
+            if (t.Type == TransactionType.CardPurchase)
+            {
+                // Same purchase, now the person's: stays on its statement.
+                t.DebtId = debt.Id;
+                t.ItemName = debt.PersonName;
+                t.CategoryId = null;
+                t.Quantity = null;
+                t.Note = debt.Note ?? "Lent";
+                c.Update(t);
+            }
+            else
+            {
+                c.Delete(t);
+                c.Insert(new Transaction
+                {
+                    Date = debt.Date, Amount = debt.Amount, AccountId = debt.AccountId, DebtId = debt.Id,
+                    Type = debt.Direction == DebtDirection.Borrowed ? TransactionType.BorrowIn : TransactionType.LendOut,
+                    Note = debt.Note ?? debt.PersonName
+                });
+            }
+            if (debt.Direction == DebtDirection.Borrowed)
+                c.Insert(LiabilityEngine.BuildPersonalDue(debt));
+        });
+        return debt;
     }
 
     /// <summary>

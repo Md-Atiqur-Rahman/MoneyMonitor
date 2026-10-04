@@ -49,7 +49,7 @@ public static class MonthSummaryService
             DuePaid: Sum(TransactionType.DuePayment),
             DueRemaining: thisMonth.Sum(d => d.Remaining) + earlierUnpaid.Sum(d => d.Remaining),
             CashExpenses: Sum(TransactionType.Expense),
-            CardSpending: Sum(TransactionType.CardPurchase),
+            CardSpending: inMonth.Where(t => t.Type == TransactionType.CardPurchase && t.IsSpending()).Sum(t => t.Amount),
             Borrowed: Sum(TransactionType.BorrowIn),
             Lent: Sum(TransactionType.LendOut));
     }
@@ -58,7 +58,7 @@ public static class MonthSummaryService
     public static long AverageMonthlySpending(IEnumerable<Transaction> transactions, string currentMonth, int months = 3)
     {
         var totals = transactions
-            .Where(t => t.Type is TransactionType.Expense or TransactionType.CardPurchase)
+            .Where(t => t.IsSpending())
             .GroupBy(t => MonthKey.Of(t.Date))
             .Where(g => string.CompareOrdinal(g.Key, currentMonth) < 0)
             .OrderByDescending(g => g.Key)
