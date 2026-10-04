@@ -41,6 +41,8 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0034](0034-card-loans-with-and-without-installments.md) | Card loans with and without installments; money received counts as income | Accepted |
 | [0035](0035-monthly-salary-added-automatically.md) | Monthly salary, added automatically and changeable from a month | Accepted |
 | [0036](0036-splash-picture.md) | Splash picture, app icon and name (মাসিক হিসাব), photo kept out of git | Accepted |
+| [0037](0037-liabilities-paid-amounts-running-loans-last-month.md) | Liabilities: paid amounts shown, only running loans, last month = one month | Accepted |
+| [0038](0038-monthly-card-payments-added-automatically.md) | Monthly card payments (subscriptions), added automatically | Accepted |
 
 ## Template
 

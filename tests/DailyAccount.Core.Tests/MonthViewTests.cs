@@ -223,4 +223,51 @@ public sealed class MonthViewTests : IAsyncLifetime
         Assert.Equal(Tk(100_000), plan.Earned);
         Assert.False(plan.IncomeIsExpected);
     }
+
+    [Fact]
+    public async Task A_paid_card_bill_keeps_its_amount_and_date()
+    {
+        var (bank, card, _) = await SeptemberAsync();
+        var s = await _svc.LoadAsync();
+        Assert.False(s.CardBillIn(card, "2026-09").IsPaid);
+
+        await _svc.PayCardBillAsync(card.Id, "2026-09", Tk(8_333.33m), bank.Id, new DateTime(2026, 9, 15));
+        var bill = (await _svc.LoadAsync()).CardBillIn(card, "2026-09");
+        Assert.True(bill.IsPaid);
+        Assert.Equal(Tk(8_333.33m), bill.Billed);
+        Assert.Equal(Tk(8_333.33m), bill.Paid);
+        Assert.Equal(new DateTime(2026, 9, 15), bill.PaidOn);
+        Assert.Empty((await _svc.LoadAsync()).CardBillDues(card.Id, "2026-09")); // the old view lost it
+    }
+
+    [Fact]
+    public async Task A_finished_loan_shows_in_its_last_month_only()
+    {
+        var (_, card, _) = await SeptemberAsync();
+        // 2 installments, both paid before: July and August.
+        var done = await _svc.AddLoanAsync(new Loan { Lender = "Old", TotalPayable = Tk(2_000), InstallmentCount = 2, InstallmentsPaidBefore = 1, StartMonth = "2026-08", DueDay = 15, CardId = card.Id });
+        var s = await _svc.LoadAsync();
+        await _svc.PayDueAsync(s.Dues.Single(d => d.SourceType == DueSource.Loan && d.SourceId == done.Id && d.Sequence == 2).Id, Tk(1_000), s.Accounts[0].Id, new DateTime(2026, 9, 15));
+        var later = await _svc.AddLoanAsync(new Loan { Lender = "Later", TotalPayable = Tk(3_000), InstallmentCount = 3, StartMonth = "2026-12", DueDay = 15 });
+        s = await _svc.LoadAsync();
+
+        Assert.True(s.LoanIn(done, "2026-09").ShowsIn);   // its last installment is in September
+        Assert.False(s.LoanIn(done, "2026-10").ShowsIn);  // finished: not in October's list
+        Assert.True(s.LoanIn(later, "2026-10").ShowsIn);  // not started yet: pending, shown
+        Assert.True(s.Loans.Any(l => l.Id == done.Id));    // hidden, never deleted
+    }
+
+    [Fact]
+    public async Task Last_month_is_only_the_month_before()
+    {
+        var (_, card, _) = await SeptemberAsync(); // a 10,000 purchase on 20 Sept
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(500), Date = new DateTime(2026, 8, 5) });
+        await _svc.AddTransactionAsync(new() { Type = TransactionType.CardPurchase, CardId = card.Id, Amount = Tk(700), Date = new DateTime(2026, 10, 2) });
+        var s = await _svc.LoadAsync();
+
+        var last = s.LastCyclePurchases(card, new DateTime(2026, 10, 3));
+        Assert.All(last, t => Assert.Equal(9, t.Date.Month)); // September only, no August
+        Assert.Equal(Tk(10_000), last.Sum(t => t.Amount));
+        Assert.Equal(Tk(500), s.LastCyclePurchases(card, new DateTime(2026, 9, 30)).Sum(t => t.Amount)); // from September: August
+    }
 }

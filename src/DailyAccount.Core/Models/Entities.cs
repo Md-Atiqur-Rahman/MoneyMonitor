@@ -159,6 +159,23 @@ public class SalaryRate
     public int Day { get; set; } = 1;
 }
 
+/// <summary>
+/// A card purchase that repeats every month by itself (ADR 0038), e.g. an AI subscription: added on
+/// <see cref="Day"/> of every month from <see cref="FromMonth"/> until <see cref="StopMonth"/> (not included).
+/// </summary>
+public class CardSubscription
+{
+    [PrimaryKey, AutoIncrement] public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public long Amount { get; set; }
+    public int CardId { get; set; }
+    public int? CategoryId { get; set; }
+    public int Day { get; set; } = 1;
+    public string FromMonth { get; set; } = "";
+    /// <summary>First month without it; null = still running. Stopping never deletes earlier purchases.</summary>
+    public string? StopMonth { get; set; }
+}
+
 /// <summary>Small key/value facts about the database itself, e.g. which one-time setup steps have run.</summary>
 public class AppMeta
 {

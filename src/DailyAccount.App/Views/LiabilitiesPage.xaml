@@ -64,6 +64,7 @@
                                 </Grid>
                                 <Label Text="{loc:Tr Card_ThisMonth}" TextColor="#C8D6EE" FontSize="13" />
                                 <Label Text="{Binding ThisMonth}" TextColor="White" FontSize="28" FontAttributes="Bold" />
+                                <Label Text="{Binding PaidNote}" TextColor="#C8D6EE" FontSize="12" IsVisible="{Binding HasPaidNote}" />
                                 <BoxView HeightRequest="1" Color="#4A6FA8" Margin="0,4" />
                                 <Label Text="{Binding Available}" TextColor="White" FontSize="18" FontAttributes="Bold" />
                                 <ProgressBar Progress="{Binding UsedProgress}" ProgressColor="White" />
@@ -181,6 +182,8 @@
                                             <Button Grid.Column="1" Text="{loc:Tr Card_PayBill}" Command="{Binding Pay}" IsVisible="{Binding CanPay}" Style="{StaticResource Small}" />
                                         </Grid>
                                         <Label Text="{Binding ThisMonthSub}" Style="{StaticResource Muted}" IsVisible="{Binding CanPay}" />
+                                        <!-- Paid: the amount and date in small text (ADR 0037) -->
+                                        <Label Text="{Binding PaidNote}" Style="{StaticResource Muted}" FontSize="12" IsVisible="{Binding HasPaidNote}" />
                                         <!-- Purchases on this bill: one total line; tap → "Last month" tab (ADR 0022) -->
                                         <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0" IsVisible="{Binding HasBillPurchases}">
                                             <Grid.GestureRecognizers>
@@ -297,6 +300,33 @@
                     <VerticalStackLayout>
                         <VerticalStackLayout BindableLayout.ItemsSource="{Binding Lent}" BindableLayout.ItemTemplate="{StaticResource DebtTemplate}" />
                         <Label Text="{loc:Tr Dues_Nothing}" Style="{StaticResource Muted}" IsVisible="{Binding LentEmpty}" Padding="0,10" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Monthly card purchases, added by themselves (ADR 0038) -->
+                <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                    <Label Text="{loc:Tr Sub_Section}" Style="{StaticResource H2}" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="{loc:Tr Sub_Add}" Command="{Binding AddSubscriptionCommand}" Style="{StaticResource SmallOutline}" />
+                </Grid>
+                <Label Text="{loc:Tr Sub_Hint}" Style="{StaticResource Muted}" />
+                <Border Style="{StaticResource Card}" Padding="16,6">
+                    <VerticalStackLayout>
+                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Subscriptions}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SubscriptionRow">
+                                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" Padding="0,10" RowSpacing="4">
+                                        <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                        <Label Grid.Column="1" Text="{Binding Amount}" Style="{StaticResource Amount}" HorizontalOptions="End" />
+                                        <Label Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Subtitle}" Style="{StaticResource Muted}" />
+                                        <HorizontalStackLayout Grid.Row="2" Grid.ColumnSpan="2" Spacing="6" HorizontalOptions="End" IsVisible="{Binding IsRunning}">
+                                            <Button Text="{loc:Tr Sub_Change}" Command="{Binding Change}" Style="{StaticResource SmallOutline}" />
+                                            <Button Text="{loc:Tr Salary_Stop}" Command="{Binding Stop}" Style="{StaticResource SmallOutline}" />
+                                        </HorizontalStackLayout>
+                                    </Grid>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                        <Label Text="{loc:Tr Dues_Nothing}" Style="{StaticResource Muted}" IsVisible="{Binding SubscriptionsEmpty}" Padding="0,10" />
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>

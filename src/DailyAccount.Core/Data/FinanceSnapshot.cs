@@ -19,7 +19,21 @@ public sealed record CardNext(long Emi, long Purchases)
 }
 
 /// <summary>A loan in one month (see <see cref="FinanceSnapshot.LoanIn"/>).</summary>
-public sealed record LoanInMonth(int PaidCount, long PaidAmount, long Remaining, Due? Installment);
+public sealed record LoanInMonth(int PaidCount, long PaidAmount, long Remaining, Due? Installment)
+{
+    /// <summary>
+    /// Shown in that month's Loans tab (ADR 0037): still running (something left after it, or not started yet),
+    /// or its installment falls in that month — so a loan finished in that month shows once, then no more.
+    /// </summary>
+    public bool ShowsIn => Remaining > 0 || Installment is not null;
+}
+
+/// <summary>A card's payment of one month (ADR 0037): everything due on it, what was paid, and when.</summary>
+public sealed record CardMonthBill(long Billed, long Paid, DateTime? PaidOn, List<Due> Dues)
+{
+    public long Remaining => Billed - Paid;
+    public bool IsPaid => Billed > 0 && Remaining <= 0;
+}
 
 /// <summary>What a month left behind for the next one (see <see cref="FinanceSnapshot.Carry"/>).</summary>
 public sealed record MonthCarry(string Month, long Income, long CashExpenses, long BillsPaid, long Saved,
@@ -39,7 +53,8 @@ public sealed record FinanceSnapshot(
     List<PersonalDebt> Debts,
     List<Due> Dues,
     List<BudgetItem> Budget,
-    List<SalaryRate>? SalaryRates = null)
+    List<SalaryRate>? SalaryRates = null,
+    List<CardSubscription>? Subscriptions = null)
 {
     /// <summary>The salary rate that applies in <paramref name="month"/>, if any (ADR 0035).</summary>
     public SalaryRate? SalaryRateIn(string month) =>
@@ -201,6 +216,29 @@ public sealed record FinanceSnapshot(
         return new CardNext(
             dues.Where(d => d.SourceType == DueSource.Loan).Sum(d => d.Remaining),
             dues.Where(d => d.SourceType == DueSource.Card).Sum(d => d.Remaining) + Unbilled(card, day));
+    }
+
+    /// <summary>
+    /// The card payment of <paramref name="month"/>: its statement + EMIs due that month, paid or not, with the
+    /// date of the last payment on them. Unlike <see cref="CardBillDues"/> it doesn't lose a bill once it's paid.
+    /// </summary>
+    public CardMonthBill CardBillIn(CreditCard card, string month)
+    {
+        var dues = CardDues(card.Id).Where(d => d.DueMonth == month).ToList();
+        var ids = dues.Select(d => d.Id).ToHashSet();
+        var paidOn = Transactions.Where(t => t.Type == TransactionType.DuePayment && t.DueId is { } id && ids.Contains(id))
+            .Select(t => (DateTime?)t.Date).DefaultIfEmpty(null).Max();
+        return new CardMonthBill(dues.Sum(d => d.Amount), dues.Sum(d => d.PaidAmount), paidOn, dues);
+    }
+
+    /// <summary>
+    /// Card purchases of the month before the one running on <paramref name="day"/> — Liabilities → Last month
+    /// (ADR 0037): only that one cycle, not every earlier one.
+    /// </summary>
+    public List<Transaction> LastCyclePurchases(CreditCard card, DateTime day)
+    {
+        var current = LiabilityEngine.CycleStart(card, day);
+        return CyclePurchases(card, current.AddDays(-1));
     }
 
     public long Unbilled(CreditCard card, DateTime day)

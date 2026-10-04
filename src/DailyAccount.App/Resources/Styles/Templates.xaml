@@ -43,7 +43,7 @@
                 <Label Text="{Binding Subtitle}" Style="{StaticResource Muted}" LineBreakMode="TailTruncation" />
             </VerticalStackLayout>
             <Label Grid.Column="1" Text="{Binding Amount}" TextColor="{Binding AmountColor}" Style="{StaticResource Amount}" VerticalOptions="Center" />
-            <ImageButton Grid.Column="2" Source="trash.png" Command="{Binding Delete}" WidthRequest="40" HeightRequest="40" Padding="10" BackgroundColor="Transparent" SemanticProperties.Description="{loc:Tr Delete}" />
+            <ImageButton Grid.Column="2" Source="trash.png" Command="{Binding Delete}" IsVisible="{Binding CanDelete}" WidthRequest="40" HeightRequest="40" Padding="10" BackgroundColor="Transparent" SemanticProperties.Description="{loc:Tr Delete}" />
         </Grid>
     </DataTemplate>
 

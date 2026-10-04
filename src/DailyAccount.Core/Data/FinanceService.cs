@@ -25,7 +25,8 @@ public sealed class FinanceService(FinanceDatabase database)
             await Db.Table<PersonalDebt>().ToListAsync(),
             await Db.Table<Due>().ToListAsync(),
             await Db.Table<BudgetItem>().ToListAsync(),
-            await Db.Table<SalaryRate>().ToListAsync());
+            await Db.Table<SalaryRate>().ToListAsync(),
+            await Db.Table<CardSubscription>().ToListAsync());
     }
 
     /// <summary>
@@ -34,6 +35,8 @@ public sealed class FinanceService(FinanceDatabase database)
     /// </summary>
     public async Task<int> GenerateDuesAsync(DateTime today)
     {
+        // Subscriptions first, so this month's automatic purchases land on the statements below (ADR 0038).
+        await GenerateSubscriptionsAsync(today);
         var s = await LoadAsync();
         var newDues = new List<Due>();
         var updated = new List<Due>();
@@ -61,6 +64,91 @@ public sealed class FinanceService(FinanceDatabase database)
         }
         await GenerateSalaryAsync(today); // every page that refreshes dues also gets the month's salary
         return newDues.Count;
+    }
+
+    // ---------- Monthly card subscriptions (ADR 0038) ----------
+
+    private static string SubscriptionKey(int id, string month) => $"sub:{id}:{month}";
+
+    /// <summary>Adds a card purchase that repeats every month, and this month's (or earlier months') at once.</summary>
+    public async Task<CardSubscription> AddSubscriptionAsync(CardSubscription sub, DateTime today)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(sub.Name)) throw new FinanceException("Err_Name");
+        if (sub.Amount <= 0) throw new FinanceException("Err_Amount");
+        if (sub.Day is < 1 or > 31) throw new FinanceException("Err_Day");
+        if (await Db.FindAsync<CreditCard>(sub.CardId) is null) throw new FinanceException("Err_NotFound");
+        sub.Name = sub.Name.Trim();
+        await Db.InsertAsync(sub);
+        await GenerateDuesAsync(today);
+        return sub;
+    }
+
+    /// <summary>A new amount for the purchases still to be added (this month's if not added yet, and later ones).</summary>
+    public async Task SetSubscriptionAmountAsync(int id, long amount)
+    {
+        await database.InitAsync();
+        if (amount <= 0) throw new FinanceException("Err_Amount");
+        var sub = await Db.FindAsync<CardSubscription>(id) ?? throw new FinanceException("Err_NotFound");
+        sub.Amount = amount;
+        await Db.UpdateAsync(sub);
+    }
+
+    /// <summary>Stops it from <paramref name="month"/> on. Purchases already added stay as they are.</summary>
+    public async Task StopSubscriptionAsync(int id, string month)
+    {
+        await database.InitAsync();
+        var sub = await Db.FindAsync<CardSubscription>(id) ?? throw new FinanceException("Err_NotFound");
+        sub.StopMonth = month;
+        await Db.UpdateAsync(sub);
+    }
+
+    /// <summary>
+    /// For every running subscription and every month from its start up to <paramref name="today"/> whose day has
+    /// come: adds the card purchase once (marked in AppMeta). A month that already has a purchase of that name on
+    /// that card (typed by hand) is left alone, and a deleted automatic purchase is not added again.
+    /// </summary>
+    public async Task<int> GenerateSubscriptionsAsync(DateTime today)
+    {
+        await database.InitAsync();
+        var subs = await Db.Table<CardSubscription>().ToListAsync();
+        if (subs.Count == 0) return 0;
+        var done = (await Db.Table<AppMeta>().ToListAsync()).Where(m => m.Key.StartsWith("sub:")).Select(m => m.Key).ToHashSet();
+        var purchases = await Db.Table<Transaction>().Where(t => t.Type == TransactionType.CardPurchase).ToListAsync();
+        var current = MonthKey.Of(today);
+        var added = 0;
+
+        foreach (var sub in subs)
+        {
+            for (var month = sub.FromMonth; string.CompareOrdinal(month, current) <= 0; month = MonthKey.Add(month, 1))
+            {
+                if (sub.StopMonth is { } stop && string.CompareOrdinal(month, stop) >= 0) break;
+                var key = SubscriptionKey(sub.Id, month);
+                if (done.Contains(key)) continue;
+                var day = MonthKey.DayIn(month, sub.Day);
+                if (day > today.Date) continue;
+
+                var typed = purchases.Any(t => t.CardId == sub.CardId && MonthKey.Contains(month, t.Date)
+                                               && string.Equals(t.ItemName?.Trim(), sub.Name, StringComparison.OrdinalIgnoreCase));
+                await Db.RunInTransactionAsync(c =>
+                {
+                    string value = "typed";
+                    if (!typed)
+                    {
+                        var t = new Transaction
+                        {
+                            Type = TransactionType.CardPurchase, CardId = sub.CardId, CategoryId = sub.CategoryId,
+                            ItemName = sub.Name, Amount = sub.Amount, Date = day, Note = "Automatic"
+                        };
+                        c.Insert(t);
+                        value = t.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        added++;
+                    }
+                    c.InsertOrReplace(new AppMeta { Key = key, Value = value });
+                });
+            }
+        }
+        return added;
     }
 
     // ---------- Monthly salary (ADR 0035) ----------
@@ -873,7 +961,7 @@ public sealed class FinanceService(FinanceDatabase database)
             CreatedAt = now,
             Accounts = s.Accounts, Categories = s.Categories, Transactions = s.Transactions,
             Loans = s.Loans, Cards = s.Cards, Bills = s.Bills, Debts = s.Debts, Dues = s.Dues,
-            Budget = s.Budget, SalaryRates = s.SalaryRates ?? []
+            Budget = s.Budget, SalaryRates = s.SalaryRates ?? [], Subscriptions = s.Subscriptions ?? []
         };
     }
 
@@ -885,6 +973,8 @@ public sealed class FinanceService(FinanceDatabase database)
         {
             c.DeleteAll<BudgetItem>();
             c.DeleteAll<SalaryRate>();
+            c.DeleteAll<CardSubscription>();
+            c.Execute("DELETE FROM AppMeta WHERE Key LIKE 'sub:%'");
             c.Execute("DELETE FROM AppMeta WHERE Key LIKE 'salary:%'"); // the backup's months are marked again below
             c.DeleteAll<Due>();
             c.DeleteAll<Transaction>();
@@ -906,6 +996,7 @@ public sealed class FinanceService(FinanceDatabase database)
             foreach (var x in data.Transactions) c.InsertOrReplace(x);
             foreach (var x in data.Budget) c.InsertOrReplace(x);
             foreach (var x in data.SalaryRates) c.InsertOrReplace(x);
+            foreach (var x in data.Subscriptions) c.InsertOrReplace(x);
         });
     }
 }

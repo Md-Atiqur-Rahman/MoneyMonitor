@@ -16,7 +16,14 @@ public sealed record DueRow(string Title, string Subtitle, string Amount, string
 }
 
 /// <summary>One transaction in a history list. <see cref="Delete"/> removes it after a confirm.</summary>
-public sealed record TxRow(string Title, string Subtitle, string Amount, Color AmountColor, ICommand Delete, ICommand? Edit = null);
+public sealed record TxRow(string Title, string Subtitle, string Amount, Color AmountColor, ICommand? Delete, ICommand? Edit = null)
+{
+    /// <summary>False for a shown-only row (Liabilities → Last month, ADR 0037): no 🗑, no edit.</summary>
+    public bool CanDelete => Delete is not null;
+
+    /// <summary>The same row, shown only: it can't be deleted or edited from here.</summary>
+    public TxRow ReadOnly() => this with { Delete = null, Edit = null };
+}
 
 /// <summary>A labelled value with a 0–1 bar (report categories, trend). <see cref="Tap"/> opens a drill-down.</summary>
 public sealed record BarRow(string Label, string Amount, double Progress, Color BarColor, ICommand? Tap = null)
