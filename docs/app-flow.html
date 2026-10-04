@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<!-- A copy of the shared flow page for the repo (claude.ai renders the diagrams itself; here mermaid does). -->
+<script>document.addEventListener("DOMContentLoaded",()=>{mermaid.initialize({startOnLoad:false,theme:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"default"});mermaid.run({querySelector:"pre.mermaid"});});</script>
+</head>
+<body>
+<title>মাসিক হিসাব App Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column of numbered stages (the real order money moves through the app), each a diagram with a short legend. */
+:root {
+  --bg: #f6f7f4;
+  --surface: #ffffff;
+  --ink: #16201a;
+  --muted: #5b6660;
+  --line: #dfe4de;
+  --accent: #1e6b4a;      /* the app's own green */
+  --accent-soft: #e3f0e8;
+  --warn: #b4441a;        /* the app's "to pay / short" orange */
+  --warn-soft: #fbe9e1;
+  --display: "Hind Siliguri", "Nirmala UI", system-ui, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111614; --surface: #19201c; --ink: #e8ede9; --muted: #9aa69f; --line: #2c3631;
+    --accent: #5fbf8f; --accent-soft: #1d3329; --warn: #f08a5d; --warn-soft: #3a2219; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #19201c; --ink: #e8ede9; --muted: #9aa69f; --line: #2c3631;
+  --accent: #5fbf8f; --accent-soft: #1d3329; --warn: #f08a5d; --warn-soft: #3a2219; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 1rem/1.6 var(--body); margin: 0; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 40px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font: 500 .75rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 700 clamp(2rem, 5vw, 2.9rem)/1.15 var(--display); margin: 0; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.lede { color: var(--muted); max-width: 64ch; margin: 0; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.fact { font: 500 .8rem/1 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; color: var(--muted); }
+.fact b { color: var(--ink); font-weight: 600; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .92rem; }
+nav.toc a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { border-bottom-color: var(--accent); outline: none; }
+section { display: grid; gap: 14px; scroll-margin-top: 16px; }
+.stage { display: flex; align-items: baseline; gap: 12px; }
+.stage .n { font: 500 .8rem/1 var(--mono); color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 5px 8px; flex: none; }
+h2 { font: 600 1.45rem/1.25 var(--display); margin: 0; text-wrap: balance; }
+section > p { margin: 0; max-width: 70ch; color: var(--muted); }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; overflow-x: auto; }
+.diagram pre.mermaid { margin: 0; background: transparent; min-width: 560px; text-align: center; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: .93rem; min-width: 0; }
+.note b { display: block; font-family: var(--display); font-size: 1rem; margin-bottom: 2px; }
+.note.warn { border-color: var(--warn); background: var(--warn-soft); }
+code, .mono { font-family: var(--mono); font-size: .85em; }
+h3.sub { font: 600 1.05rem/1.3 var(--display); margin: 4px 0 -4px; }
+.diagram.code { padding: 0; }
+pre.sql { margin: 0; padding: 16px 18px; font: 400 .8rem/1.55 var(--mono); color: var(--ink); white-space: pre; tab-size: 2; }
+.formula { font: 500 .95rem/1.7 var(--mono); background: var(--accent-soft); border-radius: 10px; padding: 12px 16px; overflow-x: auto; white-space: pre; }
+.adr { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.adr h3 { font: 600 1.05rem/1.3 var(--display); margin: 0 0 6px; }
+.adr ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: .9rem; }
+.adr li { display: grid; grid-template-columns: 3.2em 1fr; gap: 6px; min-width: 0; }
+.adr li span:first-child { font-family: var(--mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+footer { color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 520px) { .wrap { padding-block: 28px 48px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Daily Account · Android · .NET MAUI</div>
+    <h1><span>মাসিক হিসাব</span> — how the app works</h1>
+    <p class="lede">Everything built so far, as flows: the screens, how one month is chosen for every page, how money comes in and goes out, how a card purchase becomes a bill, how the month's Due and savings are worked out, and how loans and personal lending move from open to settled.</p>
+    <div class="facts">
+      <span class="fact"><b>49</b> design decisions (ADRs)</span>
+      <span class="fact"><b>108</b> Core tests</span>
+      <span class="fact"><b>5</b> tabs</span>
+      <span class="fact"><b>14</b> tables</span>
+      <span class="fact">money in <b>poisha</b> (৳1 = 100)</span>
+      <span class="fact">offline <b>SQLite</b> + JSON backup</span>
+      <span class="fact">English / <b>বাংলা</b></span>
+    </div>
+    <nav class="toc" aria-label="Sections">
+      <a href="#structure">Structure</a><a href="#screens">Screens</a><a href="#month">One month</a>
+      <a href="#money-in">Money in</a><a href="#card">Card → bill</a><a href="#due">Due &amp; savings</a>
+      <a href="#loans">Loans</a><a href="#people">Lend &amp; borrow</a><a href="#auto">Automatic entries</a>
+      <a href="#data">Data</a><a href="#schema">Schema</a><a href="#adrs">Decisions</a>
+    </nav>
+  </header>
+
+  <section id="structure">
+    <div class="stage"><span class="n">1</span><h2>How the code is built</h2></div>
+    <p>All money rules live in the Core library, which is tested on its own. The app only shows what Core calculates. Every page loads one snapshot of the database and computes from memory.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph Phone["Android phone"]
+    UI["App · MAUI pages + ViewModels<br/>formats ৳, English / বাংলা"]
+    MS["MonthState<br/>one month for all pages"]
+    DB[("SQLite<br/>dailyaccount.db3")]
+  end
+  subgraph Core["DailyAccount.Core · no UI"]
+    FS["FinanceService<br/>add · edit · pay · generate"]
+    SN["FinanceSnapshot<br/>everything in memory"]
+    SV["Services<br/>Budget · Liability · CashFlow · ItemMath"]
+  end
+  T["108 xUnit tests"] --> Core
+  UI --> MS
+  UI -->|"commands"| FS
+  FS --> DB
+  FS -->|"LoadAsync"| SN
+  SN --> SV
+  SV -->|"numbers"| UI
+  UI -->|"Backup / Restore"| J[["JSON file<br/>Drive · WhatsApp · Download"]]
+    </pre></div>
+  </section>
+
+  <section id="screens">
+    <div class="stage"><span class="n">2</span><h2>Screens and where each one leads</h2></div>
+    <p>Five tabs at the bottom. Every number on Home is a door to the page that explains it.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart TB
+  Home["Home<br/>Bank Balance + Savings / Short<br/>Budget · Expenses · Due · Card · Forecast"]
+  Budget["Budget<br/>Income − Payments due − Spending plan = Save / Short"]
+  Dues["Dues<br/>Due this month · Liabilities · Expenses · Fully paid"]
+  Accounts["Accounts<br/>balance at month end · history"]
+  Liab["Liabilities<br/>Cards · This month · Last month · Loans · Personal"]
+  Reports["Reports<br/>Cash flow · categories · items · 6-month trend"]
+  Add["Add / Edit entry<br/>Income · Expense · Card · Transfer · Borrow · Lend"]
+  Pay["Pay<br/>card bill · installment · repay · money returned"]
+  Flow["Breakdowns<br/>Money in · Loan &amp; Card Paid · Cash expenses<br/>card bill purchases · Lent &amp; borrowed · person"]
+  Settings["Settings<br/>start month · salary · income · categories · backup"]
+  Home -->|"Bank Balance"| Accounts
+  Home -->|"Savings / Budget / Forecast"| Budget
+  Home -->|"Due"| Dues
+  Home -->|"Card payment"| Liab
+  Home -->|"Expenses · chart icon"| Reports
+  Home -->|"+ Add income / expense"| Add
+  Home --> Settings
+  Budget -->|"Due ›"| Dues
+  Dues -->|"+ Expense"| Add
+  Dues -->|"Repay"| Pay
+  Liab -->|"Pay card bill · Repay · Money returned"| Pay
+  Reports --> Flow
+  Reports -->|"Due this month ›"| Dues
+  Reports -->|"All entries"| Add
+  Flow -->|"a person"| Flow
+    </pre></div>
+  </section>
+
+  <section id="month">
+    <div class="stage"><span class="n">3</span><h2>One month for every page</h2></div>
+    <p>The month in the header is the month of every number. Moving to September on any page moves all pages. An earlier month is shown as it stood on its last day.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+  A["‹ › or tap the month name<br/>on Home, Budget, Dues, Reports,<br/>Accounts, Liabilities"] --> M(("MonthState"))
+  M --> B{"month is earlier<br/>than today's?"}
+  B -->|"yes"| C["seen as of its last day<br/>banner: Back to this month"]
+  B -->|"no"| D["seen as of today"]
+  C --> E["balances at month end · its own bill · its installment<br/>Last month tab = the month before only (read-only)"]
+  D --> E
+    </pre></div>
+  </section>
+
+  <section id="money-in">
+    <div class="stage"><span class="n">4</span><h2>Money in</h2></div>
+    <p>Salary arrives by itself. Borrowed money also counts as money the month had, and stays a liability until it is repaid.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+  S["Monthly salary<br/>added on pay day by itself"] --> I["Income"]
+  BO["Bonus · other income<br/>typed"] --> I
+  P["Borrow from a person<br/>Person ▾ + Add person"] --> BR["Borrowed"]
+  L["Card loan received<br/>with or without installments"] --> BR
+  R["Money returned<br/>by someone you lent to"] --> BR
+  I --> BI["Budget income<br/>= income + borrowed"]
+  BR --> BI
+  I --> CF["Reports → Money in"]
+  BR --> CF
+  P -.->|"stays owed"| LI["Liabilities → Personal"]
+  L -.->|"stays owed"| LO["Liabilities → Loans"]
+    </pre></div>
+  </section>
+
+  <section id="card">
+    <div class="stage"><span class="n">5</span><h2>From a card purchase to a paid bill</h2></div>
+    <p>A card purchase moves no money on the day. Each month's purchases become a statement on the 1st, joined by that month's card EMIs, and are paid by the 15th.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+  CP["Card purchase<br/>item by item: qty × rate = price"] --> CY["This month tab<br/>purchases of the running cycle"]
+  SUB["Monthly card payment<br/>e.g. AI subscription, by itself"] --> CY
+  LEND["Lend paid by card<br/>not own spending"] --> CY
+  CY -->|"statement day 1"| ST["Statement"]
+  EMI["Card EMIs due that month"] --> BILL["Card bill of the month"]
+  ST --> BILL
+  BILL -->|"Pay card bill"| PAID["Paid ✓<br/>৳x paid on 3 Oct"]
+  ST -.->|"next month"| LM["Last month tab<br/>shown only, no edit"]
+  PAID --> RP["Reports → Loan &amp; Credit Card Paid<br/>a bill opens its purchases"]
+    </pre></div>
+  </section>
+
+  <section id="due">
+    <div class="stage"><span class="n">6</span><h2>The month's Due, and what is saved</h2></div>
+    <p>Due means what is still to pay this month, the same number on Home, Dues and Reports. A negative result is called Short, never savings.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart TB
+  BI["Budget item<br/>estimate − spent"] --> Q{"paid in full?"}
+  Q -->|"yes"| OK["✓ Fully paid"]
+  Q -->|"struck through<br/>won't pay"| SK["Not paying this month<br/>leaves the budget and Due"]
+  Q -->|"no"| EX["Expenses still to pay"]
+  NL["Loans not on a card"] --> LI["Liabilities still to pay"]
+  PD["Borrowing whose pay month has come"] --> LI
+  EX --> DUE(["Due this month"])
+  LI --> DUE
+  DUE --> RES{"Money in − Loan &amp; Card Paid<br/>− Cash expenses − Due"}
+  RES -->|"≥ 0"| SAVE["Saved so far (after dues)"]
+  RES -->|"&lt; 0"| SHORT["Short so far (after dues)"]
+    </pre></div>
+    <div class="formula">Budget:   Save / Short = Income (earned + borrowed) − Payments due this month − Spending plan
+Reports:  Saved / Short = Money in − Loan &amp; Credit Card Paid − Cash expenses − Due this month
+Dues:     Left after paying the due = Bank balance − Due this month</div>
+  </section>
+
+  <section id="loans">
+    <div class="stage"><span class="n">7</span><h2>Loans</h2></div>
+    <p>A card loan can run in installments from the start, or be one amount that is later converted into EMI. Either way its month can be moved, and Pay appears once that month has come.</p>
+    <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> Pending: New loan, money received counts as income
+  Pending --> Due: its month has come
+  Due --> Running: installment paid
+  Running --> Due: next month
+  Running --> Finished: last installment paid
+  Pending --> Pending: Change month
+  state "One amount" as One
+  [*] --> One: Without installments
+  One --> Due: pay month has come, on that card bill
+  One --> Pending: Convert to EMI (new total, count, from month)
+  Finished --> [*]: shown in its last month only
+    </pre></div>
+  </section>
+
+  <section id="people">
+    <div class="stage"><span class="n">8</span><h2>Lending and borrowing with people</h2></div>
+    <p>Every person is chosen from one list, so two lends to the same person add up. Money paid back settles the oldest lend first. Settled ones stay in the Personal tab for their month, and in the report for 12 months.</p>
+    <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> Lent: Lend · cash, bank or card
+  [*] --> Lent: Edit an expense or card purchase into a Lend
+  Lent --> Partly: Money returned (part)
+  Partly --> Settled: Money returned (rest)
+  Lent --> Settled: Money returned (all)
+  Lent --> Settled: Gift it, not income or spending
+  Partly --> Settled: Gift it (rest)
+  [*] --> Borrowed: Borrow, with a pay-back month
+  Borrowed --> BorrowedDue: pay month has come, counts in Due
+  BorrowedDue --> Settled: Repay
+  Settled --> [*]: report keeps it 12 months
+    </pre></div>
+  </section>
+
+  <section id="auto">
+    <div class="stage"><span class="n">9</span><h2>What the app adds by itself</h2></div>
+    <p>Each time a page refreshes, the app checks what is due and adds missing entries once. Anything typed by hand, or deleted on purpose, is left alone.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+  OPEN["A page opens or refreshes"] --> G["GenerateDuesAsync"]
+  G --> SUBS["Monthly card payments<br/>on their day"]
+  G --> STM["Card statements<br/>for closed cycles"]
+  G --> SAL["Monthly salary<br/>on pay day"]
+  G --> BUD["Monthly budget lines<br/>copied into new months"]
+  SUBS --> CHK{"already added, typed<br/>or deleted this month?"}
+  SAL --> CHK
+  CHK -->|"yes"| SKIP["leave it"]
+  CHK -->|"no"| ADD["add once, marked"]
+    </pre></div>
+  </section>
+
+  <section id="data">
+    <div class="stage"><span class="n">10</span><h2>What is stored</h2></div>
+    <p>One <code>Due</code> table holds every kind of liability: card statements, loan installments, personal borrowing. Money is whole poisha everywhere.</p>
+    <div class="diagram"><pre class="mermaid">
+erDiagram
+  Account ||--o{ Transaction : "moves"
+  Category ||--o{ Transaction : "groups"
+  Category ||--o{ Category : "sub-category"
+  Category ||--o{ BudgetItem : "planned per month"
+  CreditCard ||--o{ Transaction : "card purchase"
+  CreditCard ||--o{ Loan : "EMI on"
+  CreditCard ||--o{ Due : "statement"
+  Loan ||--o{ Due : "installments"
+  Person ||--o{ PersonalDebt : "lent / borrowed"
+  PersonalDebt ||--o| Due : "borrowed money"
+  PersonalDebt ||--o{ Transaction : "given, returned, gift"
+  Due ||--o{ Transaction : "payments"
+  CreditCard ||--o{ CardSubscription : "charged monthly"
+  Account ||--o{ SalaryRate : "paid into"
+    </pre></div>
+    <div class="notes">
+      <div class="note"><b>Backup</b>Everything above, including people, salary and subscriptions, goes into one JSON file. Older backups still restore.</div>
+      <div class="note"><b>Never lost by hiding</b>Finished loans, older months and settled debts are hidden from lists, never deleted.</div>
+      <div class="note warn"><b>Kept off GitHub</b>Your spreadsheet, the import tool and the splash photo stay on the PC. Commits are checked for names and real amounts first.</div>
+    </div>
+  </section>
+
+
+  <section id="schema">
+    <div class="stage"><span class="n">11</span><h2>Database schema</h2></div>
+    <p>The 14 tables in the phone's SQLite file, with their columns and keys. PK is the primary key, FK a link to another table, UK part of a unique index. Links are kept by the app's Core rules; SQLite itself doesn't enforce them.</p>
+    <div class="diagram"><pre class="mermaid">
+erDiagram
+  Account {
+    int Id PK
+    string Name
+    string NameBn
+    int Type "Bank, Cash, MobileWallet"
+    long OpeningBalance "poisha"
+    bool IsActive
+  }
+  Category {
+    int Id PK
+    string Name
+    string NameBn
+    int Kind "Income, Expense"
+    int ParentId FK "sub-category of"
+    int SortOrder
+  }
+  Transactions {
+    int Id PK
+    datetime Date
+    long Amount "poisha, always positive"
+    int Type "Income ... LendGift"
+    int AccountId FK
+    int ToAccountId FK
+    int CategoryId FK
+    int CardId FK
+    int DueId FK
+    int DebtId FK
+    int LoanId FK
+    string Note
+    string ItemName
+    string Quantity
+  }
+  CreditCard {
+    int Id PK
+    string Name
+    long CreditLimit
+    int StatementDay
+    int DueDay
+    int PayFromAccountId FK
+  }
+  Loan {
+    int Id PK
+    string Lender
+    long Principal
+    long TotalPayable
+    int InstallmentCount
+    string StartMonth "yyyy-MM"
+    int DueDay
+    int PayFromAccountId FK
+    int CardId FK "EMI on card"
+    int InstallmentsPaidBefore
+    bool NoInstallments
+    string Note
+  }
+  Due {
+    int Id PK
+    int SourceType UK "Loan, Card, Bill, Personal"
+    int SourceId UK
+    string PeriodKey UK
+    int Sequence
+    string Title
+    string DueMonth "yyyy-MM"
+    datetime DueDate
+    long Amount
+    long PaidAmount
+    int Status "Pending, Partial, Paid"
+  }
+  Person {
+    int Id PK
+    string Name "unique, any case"
+  }
+  PersonalDebt {
+    int Id PK
+    int PersonId FK
+    string PersonName
+    int Direction "Borrowed, Lent"
+    long Amount
+    datetime Date
+    datetime ExpectedReturnDate "pay month"
+    int AccountId FK
+    int CardId FK "lent by card"
+    string Note
+  }
+  BudgetItem {
+    int Id PK
+    string Month UK "yyyy-MM"
+    int CategoryId FK
+    long Estimate
+    bool OnlyThisMonth
+    bool Skipped "won't pay"
+  }
+  SalaryRate {
+    int Id PK
+    string FromMonth UK
+    long Amount
+    int AccountId FK
+    int Day
+  }
+  CardSubscription {
+    int Id PK
+    string Name
+    long Amount
+    int CardId FK
+    int CategoryId FK
+    int Day
+    string FromMonth
+    string StopMonth
+  }
+  RecurringBill {
+    int Id PK
+    string Name
+    long Amount
+    int DayOfMonth
+    string StartMonth
+    string EndMonth
+    bool IsActive
+  }
+  AppMeta {
+    string Key PK
+    string Value
+  }
+  Account ||--o{ Transactions : "AccountId"
+  Category ||--o{ Transactions : "CategoryId"
+  Category ||--o{ Category : "ParentId"
+  Category ||--o{ BudgetItem : "CategoryId"
+  CreditCard ||--o{ Transactions : "CardId"
+  CreditCard ||--o{ Loan : "CardId"
+  Loan ||--o{ Transactions : "LoanId"
+  Due ||--o{ Transactions : "DueId"
+  Person ||--o{ PersonalDebt : "PersonId"
+  PersonalDebt ||--o{ Transactions : "DebtId"
+  CreditCard ||--o{ CardSubscription : "CardId"
+  Account ||--o{ SalaryRate : "AccountId"
+    </pre></div>
+    <h3 class="sub">As SQL</h3>
+    <div class="diagram code"><pre class="sql">-- SQLite, created by sqlite-net from DailyAccount.Core/Models/Entities.cs
+-- Money: INTEGER poisha (৳1 = 100). Dates: INTEGER ticks. Months: TEXT 'yyyy-MM'. bool: INTEGER 0/1.
+
+CREATE TABLE Account (
+  Id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  Name           VARCHAR NOT NULL,
+  NameBn         VARCHAR,
+  Type           INTEGER NOT NULL,          -- 0 Bank · 1 Cash · 2 MobileWallet
+  OpeningBalance BIGINT  NOT NULL,          -- balance on the 1st of the start month
+  IsActive       INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE Category (
+  Id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  Name      VARCHAR NOT NULL,               -- unique per kind across levels (EN or BN, any case)
+  NameBn    VARCHAR,
+  Kind      INTEGER NOT NULL,               -- 0 Income · 1 Expense
+  ParentId  INTEGER,                        -- → Category.Id (one level: Bajar → Fish)
+  SortOrder INTEGER NOT NULL
+);
+CREATE INDEX Category_ParentId ON Category (ParentId);
+
+CREATE TABLE Transactions (
+  Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  Date        BIGINT  NOT NULL,
+  Amount      BIGINT  NOT NULL,             -- always positive; the direction comes from Type
+  Type        INTEGER NOT NULL,             -- 0 Income · 1 Expense · 2 Transfer · 3 CardPurchase · 4 DuePayment
+                                            -- 5 BorrowIn · 6 LendOut · 7 LendReturn · 8 LendGift
+  AccountId   INTEGER,                      -- → Account.Id (from / into)
+  ToAccountId INTEGER,                      -- → Account.Id (transfer target)
+  CategoryId  INTEGER,                      -- → Category.Id
+  CardId      INTEGER,                      -- → CreditCard.Id (card purchase)
+  DueId       INTEGER,                      -- → Due.Id (payment of a due)
+  DebtId      INTEGER,                      -- → PersonalDebt.Id (lend, borrow, return, gift, lent by card)
+  LoanId      INTEGER,                      -- → Loan.Id (loan money received)
+  Note        VARCHAR,
+  ItemName    VARCHAR,                      -- "Rice"
+  Quantity    VARCHAR                       -- "5 kg"
+);
+CREATE INDEX Transactions_Date      ON Transactions (Date);
+CREATE INDEX Transactions_AccountId ON Transactions (AccountId);
+CREATE INDEX Transactions_CardId    ON Transactions (CardId);
+CREATE INDEX Transactions_DueId     ON Transactions (DueId);
+CREATE INDEX Transactions_DebtId    ON Transactions (DebtId);
+CREATE INDEX Transactions_LoanId    ON Transactions (LoanId);
+
+CREATE TABLE CreditCard (
+  Id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  Name             VARCHAR NOT NULL,
+  CreditLimit      BIGINT  NOT NULL,
+  StatementDay     INTEGER NOT NULL DEFAULT 1,
+  DueDay           INTEGER NOT NULL DEFAULT 15,
+  PayFromAccountId INTEGER                  -- → Account.Id
+);
+
+CREATE TABLE Loan (
+  Id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  Lender                 VARCHAR NOT NULL,
+  Principal              BIGINT  NOT NULL,
+  TotalPayable           BIGINT  NOT NULL,  -- principal + interest
+  InstallmentCount       INTEGER NOT NULL,  -- 1 for a loan without installments
+  StartMonth             VARCHAR NOT NULL,  -- first installment / pay month
+  DueDay                 INTEGER NOT NULL DEFAULT 1,
+  PayFromAccountId       INTEGER,           -- → Account.Id
+  Note                   VARCHAR,
+  CardId                 INTEGER,           -- → CreditCard.Id: EMI on this card's bill
+  InstallmentsPaidBefore INTEGER NOT NULL,
+  NoInstallments         INTEGER NOT NULL   -- one amount until converted to EMI
+);
+CREATE INDEX Loan_CardId ON Loan (CardId);
+
+CREATE TABLE Due (                          -- every liability, one row per amount per month
+  Id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  SourceType INTEGER NOT NULL,              -- 0 Loan · 1 Card statement · 2 Bill · 3 Personal borrowing
+  SourceId   INTEGER NOT NULL,              -- → Loan / CreditCard / RecurringBill / PersonalDebt
+  PeriodKey  VARCHAR NOT NULL,              -- installment no. · cycle start date · bill month
+  Sequence   INTEGER NOT NULL,
+  Title      VARCHAR NOT NULL,
+  DueMonth   VARCHAR NOT NULL,              -- '' = no month yet
+  DueDate    BIGINT,
+  Amount     BIGINT  NOT NULL,
+  PaidAmount BIGINT  NOT NULL,
+  Status     INTEGER NOT NULL               -- 0 Pending · 1 Partial · 2 Paid
+);
+CREATE UNIQUE INDEX IX_Due_Source ON Due (SourceType, SourceId, PeriodKey);
+CREATE INDEX Due_DueMonth ON Due (DueMonth);
+
+CREATE TABLE Person (
+  Id   INTEGER PRIMARY KEY AUTOINCREMENT,
+  Name VARCHAR NOT NULL                     -- unique in any letter case
+);
+
+CREATE TABLE PersonalDebt (
+  Id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  PersonId           INTEGER,               -- → Person.Id
+  PersonName         VARCHAR NOT NULL,      -- the person's name, for display
+  Direction          INTEGER NOT NULL,      -- 0 Borrowed · 1 Lent
+  Amount             BIGINT  NOT NULL,
+  Date               BIGINT  NOT NULL,
+  ExpectedReturnDate BIGINT,                -- pay-back month (its last day)
+  AccountId          INTEGER,               -- → Account.Id
+  CardId             INTEGER,               -- → CreditCard.Id: lent through a card
+  Note               VARCHAR
+);
+CREATE INDEX PersonalDebt_PersonId ON PersonalDebt (PersonId);
+
+CREATE TABLE BudgetItem (
+  Id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  Month         VARCHAR NOT NULL,
+  CategoryId    INTEGER NOT NULL,           -- → Category.Id (top level)
+  Estimate      BIGINT  NOT NULL,
+  OnlyThisMonth INTEGER NOT NULL,           -- 0 = repeats monthly
+  Skipped       INTEGER NOT NULL            -- won't pay this month (struck through)
+);
+CREATE UNIQUE INDEX IX_Budget_Month_Category ON BudgetItem (Month, CategoryId);
+
+CREATE TABLE SalaryRate (
+  Id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  FromMonth VARCHAR NOT NULL,               -- an increment is a new row from its month
+  Amount    BIGINT  NOT NULL,               -- 0 = stopped
+  AccountId INTEGER NOT NULL,               -- → Account.Id
+  Day       INTEGER NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX SalaryRate_FromMonth ON SalaryRate (FromMonth);
+
+CREATE TABLE CardSubscription (
+  Id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  Name       VARCHAR NOT NULL,
+  Amount     BIGINT  NOT NULL,
+  CardId     INTEGER NOT NULL,              -- → CreditCard.Id
+  CategoryId INTEGER,                       -- → Category.Id
+  Day        INTEGER NOT NULL DEFAULT 1,
+  FromMonth  VARCHAR NOT NULL,
+  StopMonth  VARCHAR                        -- first month without it
+);
+
+CREATE TABLE RecurringBill (                -- kept from the first version; bills are budget items now
+  Id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  Name       VARCHAR NOT NULL,
+  NameBn     VARCHAR,
+  Amount     BIGINT  NOT NULL,
+  DayOfMonth INTEGER NOT NULL DEFAULT 1,
+  StartMonth VARCHAR NOT NULL,
+  EndMonth   VARCHAR,
+  IsActive   INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE AppMeta (                      -- one-time steps and "added once" marks
+  Key   VARCHAR PRIMARY KEY,                -- default-budget-v1 · category-order-v2
+  Value VARCHAR                             -- salary:yyyy-MM · sub:{id}:yyyy-MM → the entry added
+);</pre></div>
+    <div class="notes">
+      <div class="note"><b>Money</b>Every amount is a whole number of poisha, so ৳1,00,000 ÷ 3 adds back up exactly; the last installment takes the remainder.</div>
+      <div class="note"><b>One table for every liability</b><code>Due</code> holds card statements, loan installments, bills and personal borrowing; <code>IX_Due_Source</code> stops the same one being made twice.</div>
+      <div class="note"><b>Added once</b><code>AppMeta</code> remembers each automatic salary and subscription per month, so a deleted one isn't added again.</div>
+    </div>
+  </section>
+  <section id="adrs">
+    <div class="stage"><span class="n">12</span><h2>The 49 decisions, by area</h2></div>
+    <p>Every change came with a written decision record in <code>docs/adr</code>.</p>
+    <div class="adr">
+      <div><h3>Foundations</h3><ol>
+        <li><span>0001</span><span>.NET MAUI, Android only</span></li>
+        <li><span>0002</span><span>Money as long poisha</span></li>
+        <li><span>0003</span><span>Offline SQLite</span></li>
+        <li><span>0004</span><span>Core library + in-memory snapshot</span></li>
+        <li><span>0005</span><span>One Due table for every liability</span></li>
+        <li><span>0006</span><span>Bangla / English dictionary</span></li>
+        <li><span>0007</span><span>JSON backup via share sheet</span></li>
+        <li><span>0008</span><span>Shell tabs + MVVM</span></li>
+        <li><span>0010</span><span>Side-loaded APK</span></li>
+        <li><span>0014</span><span>One-time sheet import</span></li>
+      </ol></div>
+      <div><h3>Budget, Due and savings</h3><ol>
+        <li><span>0009</span><span>Savings, spending, forecast formulas</span></li>
+        <li><span>0011</span><span>Monthly budget like the sheet</span></li>
+        <li><span>0015</span><span>Forecast from the budget</span></li>
+        <li><span>0019</span><span>Items repeat monthly or once</span></li>
+        <li><span>0020</span><span>Default budget</span></li>
+        <li><span>0024</span><span>Dues page = the budget Due</span></li>
+        <li><span>0031</span><span>Won't pay (strike through)</span></li>
+        <li><span>0033</span><span>Borrowed money in income</span></li>
+        <li><span>0045</span><span>Liabilities / Expenses groups, bank balance</span></li>
+        <li><span>0046</span><span>✓ for paid items</span></li>
+        <li><span>0047</span><span>Section totals on Budget</span></li>
+        <li><span>0049</span><span>Negative saving = Short</span></li>
+      </ol></div>
+      <div><h3>Cards and loans</h3><ol>
+        <li><span>0012</span><span>Card EMIs and the combined bill</span></li>
+        <li><span>0021</span><span>Deleting a billed purchase</span></li>
+        <li><span>0022</span><span>Last month tab</span></li>
+        <li><span>0023</span><span>Liabilities layout</span></li>
+        <li><span>0034</span><span>Loans with / without installments</span></li>
+        <li><span>0037</span><span>Paid amounts, running loans, one last month</span></li>
+        <li><span>0038</span><span>Monthly card payments</span></li>
+      </ol></div>
+      <div><h3>People</h3><ol>
+        <li><span>0030</span><span>Pay month for borrowing</span></li>
+        <li><span>0040</span><span>Lend by card, who owes what</span></li>
+        <li><span>0041</span><span>An entry that was lending</span></li>
+        <li><span>0042</span><span>A list of people</span></li>
+        <li><span>0043</span><span>Lent &amp; borrowed in two groups</span></li>
+        <li><span>0044</span><span>Gift it, settled debts</span></li>
+      </ol></div>
+      <div><h3>Months and reports</h3><ol>
+        <li><span>0017</span><span>Category breakdown</span></li>
+        <li><span>0025</span><span>Start from an earlier month</span></li>
+        <li><span>0026</span><span>Edit entries, all entries list</span></li>
+        <li><span>0028</span><span>Home of any month</span></li>
+        <li><span>0029</span><span>One month for all pages</span></li>
+        <li><span>0030</span><span>Earlier months without double counting</span></li>
+        <li><span>0032</span><span>Cash flow in detail</span></li>
+        <li><span>0039</span><span>Loan &amp; Credit Card Paid</span></li>
+        <li><span>0048</span><span>Due in the cash flow</span></li>
+      </ol></div>
+      <div><h3>Entering and screens</h3><ol>
+        <li><span>0013</span><span>Items and sub-categories</span></li>
+        <li><span>0016</span><span>Deleting categories</span></li>
+        <li><span>0018</span><span>Simple Home screen</span></li>
+        <li><span>0027</span><span>Qty × rate, + Sub, unique names</span></li>
+        <li><span>0035</span><span>Monthly salary by itself</span></li>
+        <li><span>0036</span><span>Splash, icon, name মাসিক হিসাব</span></li>
+      </ol></div>
+    </div>
+  </section>
+
+  <footer>Built from the project's decision records (ADR 0001–0049) as of 5 October 2026. Names in the diagrams are generic.</footer>
+</div>
+
+</body>
+</html>
