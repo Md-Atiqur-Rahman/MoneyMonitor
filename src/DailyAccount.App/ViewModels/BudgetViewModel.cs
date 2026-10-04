@@ -42,7 +42,12 @@ public sealed record BudgetModel(
     string Banner,
     List<BudgetRow> DueRows,
     List<BudgetRow> ItemRows,
-    ForecastModel? Forecast)
+    ForecastModel? Forecast,
+    // Totals next to the two headings (ADR 0047): the planned amount and what is paid / left.
+    string DuesTotal = "",
+    string DuesNote = "",
+    string ItemsTotal = "",
+    string ItemsNote = "")
 {
     public bool HasForecast => Forecast is not null;
     public bool HasIncomeParts => IncomeParts.Length > 0;
@@ -100,7 +105,11 @@ public sealed partial class BudgetViewModel(FinanceService finance, AppSettings 
                 .OrderByDescending(l => l.InBudget)
                 .ThenBy(l => s.Categories.FirstOrDefault(c => c.Id == l.CategoryId)?.SortOrder ?? int.MaxValue)
                 .Select(l => ItemRow(l, s)).ToList(),
-            SelectedMonth == MonthKey.Of(today) ? BuildForecast(s, today) : null);
+            SelectedMonth == MonthKey.Of(today) ? BuildForecast(s, today) : null,
+            DuesTotal: Fmt.Money(plan.DueLines.Sum(l => l.Estimate)),
+            DuesNote: Loc.F("Budget_SectionNote", Fmt.Money(plan.DueLines.Sum(l => l.Paid)), Fmt.Money(plan.DueLines.Sum(l => Math.Max(0, l.Left)))),
+            ItemsTotal: Fmt.Money(plan.BudgetEstimate),
+            ItemsNote: Loc.F("Budget_ItemsNote", Fmt.Money(plan.BudgetSpent), Fmt.Money(plan.UnpaidBudget)));
     }
 
     /// <summary>Same formula as the sheet: next month's payments + budget vs income (ADR 0015).</summary>

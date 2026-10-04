@@ -51,6 +51,7 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0044](0044-gift-it-and-settled-debts.md) | "Gift it", and where settled debts show | Accepted |
 | [0045](0045-dues-liabilities-and-expenses-with-bank-balance.md) | Dues: liabilities and expenses as two groups, with the bank balance | Accepted |
 | [0046](0046-budget-paid-checkmark.md) | A ✓ for paid items on the Budget page | Accepted |
+| [0047](0047-budget-section-totals.md) | Totals for "Payments due this month" and "Spending plan" | Accepted |
 
 ## Template
 

@@ -263,6 +263,8 @@ internal static class Strings
         ["Budget_Ok"] = ("Within income: {0} left to save", "আয়ের মধ্যে: {0} সঞ্চয় থাকবে"),
         ["Budget_Dues"] = ("Payments due this month", "এ মাসের পরিশোধ"),
         ["Budget_Items"] = ("Spending plan", "খরচের পরিকল্পনা"),
+        ["Budget_SectionNote"] = ("paid {0} · left {1}", "পরিশোধ {0} · বাকি {1}"),
+        ["Budget_ItemsNote"] = ("spent {0} · left {1}", "খরচ {0} · বাকি {1}"),
         ["Budget_NotInBudget"] = ("not in budget", "বাজেটে নেই"),
         ["Budget_OnCard"] = ("+ {0} on card, paid next month", "+ কার্ডে {0}, আগামী মাসে পরিশোধ"),
         ["Budget_AddItem"] = ("+ Add budget item", "+ বাজেট আইটেম যোগ"),
