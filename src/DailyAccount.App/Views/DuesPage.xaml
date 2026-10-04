@@ -67,18 +67,49 @@
                     <Label Text="{Binding Model.DueLabel}" Style="{StaticResource Caption}" />
                     <Label Text="{Binding Model.Due}" FontSize="30" FontAttributes="Bold" TextColor="{StaticResource Warn}" />
                     <ProgressBar Progress="{Binding Model.Progress}" />
-                    <Label Text="{Binding Model.BudgetLine}" Style="{StaticResource Muted}" />
+                    <!-- Total estimate / spent, with the bank balance and what is left after paying the due (ADR 0045) -->
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="4" Margin="0,4,0,0">
+                        <Label Text="{loc:Tr Dues_TotalEstimate}" Style="{StaticResource Muted}" />
+                        <Label Grid.Column="1" Text="{Binding Model.TotalEstimate}" FontAttributes="Bold" />
+                        <Label Grid.Row="1" Text="{loc:Tr Dues_TotalSpent}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="1" Grid.Column="1" Text="{Binding Model.TotalSpent}" FontAttributes="Bold" />
+                        <Label Grid.Row="2" Text="{Binding Model.BankLabel}" Style="{StaticResource Muted}" />
+                        <Label Grid.Row="2" Grid.Column="1" Text="{Binding Model.BankBalance}" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
+                        <BoxView Grid.Row="3" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
+                        <Label Grid.Row="4" Text="{loc:Tr Dues_AfterDue}" FontAttributes="Bold" />
+                        <Label Grid.Row="4" Grid.Column="1" Text="{Binding Model.AfterDue}" FontAttributes="Bold" TextColor="{StaticResource Primary}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding Model.AfterDueNegative}" Value="True">
+                                    <Setter Property="TextColor" Value="{StaticResource Warn}" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                    </Grid>
                 </VerticalStackLayout>
             </Border>
 
             <!-- Budget items not paid yet (+ non-card loans / dated personal dues) -->
             <Label Text="{loc:Tr Dues_NotPaid}" Style="{StaticResource Caption}" Margin="0,6,0,0" />
-            <Border Style="{StaticResource Card}" Padding="16,4">
-                <VerticalStackLayout>
-                    <VerticalStackLayout x:Name="NotPaidList" BindableLayout.ItemsSource="{Binding Model.NotPaid}" BindableLayout.ItemTemplate="{StaticResource BudgetDueTemplate}" />
-                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.OtherDues}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" IsVisible="{Binding Model.HasOtherDues}" />
-                    <Label Text="{loc:Tr Dash_NoDues}" Style="{StaticResource Muted}" IsVisible="{Binding Model.NothingDue}" Padding="0,10" />
-                </VerticalStackLayout>
+            <Border Style="{StaticResource Card}" Padding="16,10" IsVisible="{Binding Model.NothingDue}">
+                <Label Text="{loc:Tr Dash_NoDues}" Style="{StaticResource Muted}" />
+            </Border>
+
+            <!-- 1. Liabilities: loans not on a card, personal borrowing due (ADR 0045) -->
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding Model.HasOtherDues}">
+                <Label Text="{loc:Tr Dues_Liabilities}" Style="{StaticResource H2}" />
+                <Label Grid.Column="1" Text="{Binding Model.LiabilitiesTotal}" Style="{StaticResource H2}" TextColor="{StaticResource Warn}" />
+            </Grid>
+            <Border Style="{StaticResource Card}" Padding="16,4" IsVisible="{Binding Model.HasOtherDues}">
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Model.OtherDues}" BindableLayout.ItemTemplate="{StaticResource DueRowTemplate}" />
+            </Border>
+
+            <!-- 2. Expenses: budget items not paid yet -->
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding Model.HasNotPaidExpenses}">
+                <Label Text="{loc:Tr Dues_Expenses}" Style="{StaticResource H2}" />
+                <Label Grid.Column="1" Text="{Binding Model.ExpensesTotal}" Style="{StaticResource H2}" TextColor="{StaticResource Warn}" />
+            </Grid>
+            <Border Style="{StaticResource Card}" Padding="16,4" IsVisible="{Binding Model.HasNotPaidExpenses}">
+                <VerticalStackLayout x:Name="NotPaidList" BindableLayout.ItemsSource="{Binding Model.NotPaid}" BindableLayout.ItemTemplate="{StaticResource BudgetDueTemplate}" />
             </Border>
 
             <!-- Fully paid budget items -->

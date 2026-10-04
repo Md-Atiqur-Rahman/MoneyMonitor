@@ -49,6 +49,7 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0042](0042-people-list-for-lending-and-borrowing.md) | A list of people for lending and borrowing | Accepted |
 | [0043](0043-lent-and-borrowed-in-two-groups.md) | Lent & borrowed report in two groups | Accepted |
 | [0044](0044-gift-it-and-settled-debts.md) | "Gift it", and where settled debts show | Accepted |
+| [0045](0045-dues-liabilities-and-expenses-with-bank-balance.md) | Dues: liabilities and expenses as two groups, with the bank balance | Accepted |
 
 ## Template
 

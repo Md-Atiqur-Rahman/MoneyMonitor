@@ -32,8 +32,18 @@ public sealed record DuesModel(
     List<DueRow> NoDate,
     List<DueRow> CardPaid,
     List<DueRow> NextMonth,
-    string NextMonthTitle)
+    string NextMonthTitle,
+    // ADR 0045: the figures under "Due this month", and the two groups of "Not paid yet" with their totals.
+    string TotalEstimate = "",
+    string TotalSpent = "",
+    string BankBalance = "",
+    string BankLabel = "",
+    string AfterDue = "",
+    bool AfterDueNegative = false,
+    string LiabilitiesTotal = "",
+    string ExpensesTotal = "")
 {
+    public bool HasNotPaidExpenses => NotPaid.Count > 0;
     public bool NothingDue => NotPaid.Count == 0 && OtherDues.Count == 0;
     public bool HasOtherDues => OtherDues.Count > 0;
     public bool HasFullyPaid => FullyPaid.Count > 0;
@@ -93,6 +103,9 @@ public sealed partial class DuesViewModel(FinanceService finance, AppSettings se
         var s = await finance.LoadAsync();
 
         var plan = s.Plan(month, settings.ExpectedIncome);
+        // Money in the accounts (at the month's end for an earlier month) next to what is still due (ADR 0045).
+        var due = s.MonthDue(month, settings.ExpectedIncome);
+        var bank = s.TotalBalanceOn(MonthKey.AsOf(month, today));
         var items = plan.Lines.Where(l => l.InBudget)
             .OrderBy(l => s.Categories.FirstOrDefault(c => c.Id == l.CategoryId)?.SortOrder ?? int.MaxValue)
             .ToList();
@@ -141,7 +154,15 @@ public sealed partial class DuesViewModel(FinanceService finance, AppSettings se
             CardPaid: CardRows(d => d.DueMonth == month && d.Status == DueStatus.Paid),
             // Next month's dues are shown for planning only: no Pay button.
             NextMonth: Display.DueRows(s.Dues.Where(d => d.DueMonth == next && d.Status != DueStatus.Paid), s, canPay: false),
-            NextMonthTitle: Loc.T("Dues_NextMonth") + " · " + Fmt.Month(next));
+            NextMonthTitle: Loc.T("Dues_NextMonth") + " · " + Fmt.Month(next),
+            TotalEstimate: Fmt.Money(plan.BudgetEstimate),
+            TotalSpent: Fmt.Money(plan.BudgetSpent),
+            BankBalance: Fmt.Money(bank),
+            BankLabel: isPast ? Loc.F("Home_AccountsOn", Fmt.Date(MonthKey.LastDay(month))) : Loc.T("Home_Accounts"),
+            AfterDue: Fmt.Money(bank - due),
+            AfterDueNegative: bank - due < 0,
+            LiabilitiesTotal: Fmt.Money(s.NonCardDuesUpTo(month).Sum(d => d.Remaining)),
+            ExpensesTotal: Fmt.Money(items.Where(l => l.Left > 0).Sum(l => l.Left)));
         FocusRow = Model.NotPaid.FirstOrDefault(r => r.Highlight);
     }
 

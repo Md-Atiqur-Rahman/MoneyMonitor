@@ -111,6 +111,12 @@ internal static class Strings
         ["Dues_DueTotal"] = ("Due this month", "এ মাসে বাকি"),
         ["Dues_BudgetLine"] = ("Budget {0} · spent {1}", "বাজেট {0} · খরচ {1}"),
         ["Dues_NotPaid"] = ("Not paid yet", "এখনও বাকি"),
+        // ----- Dues: two groups, figures with the bank balance (ADR 0045) -----
+        ["Dues_Liabilities"] = ("Liabilities", "দায়"),
+        ["Dues_Expenses"] = ("Expenses", "খরচ"),
+        ["Dues_TotalEstimate"] = ("Total estimate", "মোট আনুমানিক"),
+        ["Dues_TotalSpent"] = ("Total spent", "মোট খরচ"),
+        ["Dues_AfterDue"] = ("Left after paying the due", "দেনা দেওয়ার পর থাকবে"),
         ["Dues_ItemSub"] = ("Estimate {0} · spent {1}", "আনুমানিক {0} · খরচ {1}"),
         ["Dues_Over"] = ("over by {0}", "{0} বেশি খরচ"),
         ["Dues_AddExpense"] = ("+ Expense", "+ খরচ"),
