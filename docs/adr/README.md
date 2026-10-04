@@ -46,6 +46,9 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0039](0039-loan-and-card-paid-with-bill-purchases.md) | "Loan & Credit Card Paid", and a card bill opens its purchases | Accepted |
 | [0040](0040-lending-by-card-and-who-owes-what.md) | Lending through a card, and who owes what | Accepted |
 | [0041](0041-entry-that-was-lending-becomes-a-debt.md) | An entry that was really lending or borrowing becomes a personal debt | Accepted |
+| [0042](0042-people-list-for-lending-and-borrowing.md) | A list of people for lending and borrowing | Accepted |
+| [0043](0043-lent-and-borrowed-in-two-groups.md) | Lent & borrowed report in two groups | Accepted |
+| [0044](0044-gift-it-and-settled-debts.md) | "Gift it", and where settled debts show | Accepted |
 
 ## Template
 

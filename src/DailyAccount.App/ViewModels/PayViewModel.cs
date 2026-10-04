@@ -16,6 +16,7 @@ public sealed partial class PayViewModel(FinanceService finance) : ViewModelBase
 {
     private int? _dueId;
     private int? _debtId;
+    private int? _personId; // money returned by a person, settles their lends oldest first (ADR 0042)
     private int? _cardId;
     private string _cardMonth = "";
 
@@ -37,6 +38,7 @@ public sealed partial class PayViewModel(FinanceService finance) : ViewModelBase
     {
         if (query.TryGetValue("dueId", out var d) && int.TryParse(d?.ToString(), out var dueId)) _dueId = dueId;
         if (query.TryGetValue("debtId", out var b) && int.TryParse(b?.ToString(), out var debtId)) _debtId = debtId;
+        if (query.TryGetValue("personId", out var pp) && int.TryParse(pp?.ToString(), out var personId)) _personId = personId;
         if (query.TryGetValue("cardId", out var c) && int.TryParse(c?.ToString(), out var cardId)) _cardId = cardId;
         if (query.TryGetValue("month", out var m)) _cardMonth = m?.ToString() ?? "";
     }
@@ -87,6 +89,18 @@ public sealed partial class PayViewModel(FinanceService finance) : ViewModelBase
                 _ => null
             };
         }
+        else if (_personId is { } personId && s.PeopleLedgers().FirstOrDefault(x => x.Person.Id == personId) is { } person)
+        {
+            IsDue = false;
+            Title = Loc.F("Return_Title", person.Person.Name);
+            Subtitle = Loc.F("Debt_LentTimes", Fmt.Money(person.LentTotal), Fmt.Number(person.Lent.Count));
+            RemainingLabel = Loc.T("Return_Owed");
+            Remaining = Fmt.Money(person.LentLeft);
+            AmountText = Fmt.EditableAmount(person.LentLeft);
+            AccountLabel = Loc.T("Return_Into");
+            ButtonText = Loc.T("Return_Button");
+            preferredAccount = person.Lent.Select(l => l.Debt.AccountId).FirstOrDefault(a => a is not null);
+        }
         else if (_debtId is { } debtId && s.Debts.FirstOrDefault(x => x.Id == debtId) is { } debt)
         {
             IsDue = false;
@@ -118,6 +132,7 @@ public sealed partial class PayViewModel(FinanceService finance) : ViewModelBase
         var ok = await Ui.Try(() =>
             _cardId is { } cardId ? finance.PayCardBillAsync(cardId, _cardMonth, amount, accountId, Date)
             : _dueId is { } dueId ? finance.PayDueAsync(dueId, amount, accountId, Date)
+            : _personId is { } personId ? finance.ReceiveFromPersonAsync(personId, amount, accountId, Date)
             : finance.ReceiveLendReturnAsync(_debtId ?? 0, amount, accountId, Date));
         if (ok) await Ui.Back();
     }

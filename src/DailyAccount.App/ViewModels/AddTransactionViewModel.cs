@@ -175,7 +175,35 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
     [ObservableProperty] private List<Option> _cards = [];
     [ObservableProperty] private Option? _selectedCard;
     [ObservableProperty] private string _accountLabel = "";
-    [ObservableProperty] private string _personName = "";
+    /// <summary>Lend / Borrow: the person, chosen from the list (ADR 0042); "+ Add person" adds one.</summary>
+    [ObservableProperty] private List<Option> _people = [];
+    [ObservableProperty] private Option? _selectedPerson;
+
+    private void FillPeople(int? select = null)
+    {
+        if (_snapshot is null) return;
+        var keep = select ?? SelectedPerson?.Id;
+        People = (_snapshot.People ?? []).OrderBy(p => p.Name).Select(p => new Option(p.Id, p.Name)).ToList();
+        SelectedPerson = People.FirstOrDefault(p => p.Id == keep);
+    }
+
+    /// <summary>"+ Add person": a new person, selected right away; a name that exists is selected instead.</summary>
+    [RelayCommand]
+    private async Task NewPerson()
+    {
+        var name = await Ui.PromptText(Loc.T("Person_New"));
+        if (name is null || _snapshot is null) return;
+        if ((_snapshot.People ?? []).FirstOrDefault(p => string.Equals(p.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)) is { } existing)
+        {
+            FillPeople(existing.Id);
+            await Ui.Alert(Loc.F("Category_ExistsSelected", existing.Name));
+            return;
+        }
+        Person? created = null;
+        if (!await Ui.Try(async () => created = await _finance.AddPersonAsync(name))) return;
+        _snapshot = await _finance.LoadAsync();
+        FillPeople(created!.Id);
+    }
     /// <summary>Borrow: the month it is to be paid back, no day (ADR 0030). First option = not decided.</summary>
     [ObservableProperty] private List<Option> _payMonths = [];
     [ObservableProperty] private Option? _selectedPayMonth;
@@ -297,6 +325,7 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
         _snapshot = await _finance.LoadAsync();
         if (PayMonths.Count == 0) FillPayMonths();
         Accounts = Display.AccountOptions(_snapshot);
+        FillPeople();
         Cards = _snapshot.Cards.Select(c => new Option(c.Id, c.Name)).ToList();
         SelectedAccount ??= Accounts.FirstOrDefault();
         SelectedToAccount ??= Accounts.Skip(1).FirstOrDefault();
@@ -537,6 +566,12 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
             CategoryId = categoryId, ItemName = item, Quantity = qty, Note = note
         };
 
+        if (_type is "borrow" or "lend" && SelectedPerson is null)
+        {
+            await Ui.Alert(Loc.T("Err_Person"));
+            return;
+        }
+
         var ok = await Ui.Try(async () =>
         {
             if (_editing is not null && _type is "borrow" or "lend")
@@ -544,7 +579,7 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
                 // It was really lending/borrowing (ADR 0041): amount, date and account or card stay as entered.
                 await _finance.ConvertToDebtAsync(_editing.Id, new PersonalDebt
                 {
-                    PersonName = PersonName,
+                    PersonId = SelectedPerson?.Id,
                     Direction = _type == "borrow" ? DebtDirection.Borrowed : DebtDirection.Lent,
                     ExpectedReturnDate = _type == "borrow" && SelectedPayMonth is { } epm && _payMonthKeys.ElementAtOrDefault(epm.Id) is { } eMonth
                         ? Core.MonthKey.LastDay(eMonth)
@@ -566,7 +601,7 @@ public sealed partial class AddTransactionViewModel : ViewModelBase, IQueryAttri
             {
                 await _finance.AddPersonalDebtAsync(new PersonalDebt
                 {
-                    PersonName = PersonName,
+                    PersonId = SelectedPerson?.Id,
                     Direction = _type == "borrow" ? DebtDirection.Borrowed : DebtDirection.Lent,
                     Amount = Fmt.ParseMoney(AmountText) ?? 0,
                     Date = Date,

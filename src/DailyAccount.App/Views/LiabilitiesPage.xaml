@@ -286,9 +286,19 @@
 
             <!-- ===== Personal ===== -->
             <VerticalStackLayout Spacing="12" IsVisible="{Binding ShowOther}">
-                <Grid ColumnDefinitions="*,Auto">
-                    <Label Text="{loc:Tr Borrowed_Section}" Style="{StaticResource H2}" VerticalOptions="Center" />
+                <!-- "You borrowed — ৳30,000" with what is repaid / left (ADR 0043 note) -->
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                    <Label VerticalOptions="Center">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="{loc:Tr Borrowed_Section}" FontSize="20" FontAttributes="Bold" />
+                                <Span Text=" — " FontSize="20" />
+                                <Span Text="{Binding BorrowedTotal}" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Warn}" />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
                     <Button Grid.Column="1" Text="{loc:Tr Borrow}" Command="{Binding BorrowCommand}" Style="{StaticResource SmallOutline}" />
+                    <Label Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding BorrowedNote}" Style="{StaticResource Muted}" />
                 </Grid>
                 <Border Style="{StaticResource Card}" Padding="16,6">
                     <VerticalStackLayout>
@@ -297,9 +307,18 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
-                    <Label Text="{loc:Tr Lent_Section}" Style="{StaticResource H2}" VerticalOptions="Center" />
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,8,0,0">
+                    <Label VerticalOptions="Center">
+                        <Label.FormattedText>
+                            <FormattedString>
+                                <Span Text="{loc:Tr Lent_Section}" FontSize="20" FontAttributes="Bold" />
+                                <Span Text=" — " FontSize="20" />
+                                <Span Text="{Binding LentTotal}" FontSize="20" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
+                            </FormattedString>
+                        </Label.FormattedText>
+                    </Label>
                     <Button Grid.Column="1" Text="{loc:Tr Lend}" Command="{Binding LendCommand}" Style="{StaticResource SmallOutline}" />
+                    <Label Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding LentNote}" Style="{StaticResource Muted}" />
                 </Grid>
                 <Border Style="{StaticResource Card}" Padding="16,6">
                     <VerticalStackLayout>

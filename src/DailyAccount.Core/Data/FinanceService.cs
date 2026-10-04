@@ -26,7 +26,8 @@ public sealed class FinanceService(FinanceDatabase database)
             await Db.Table<Due>().ToListAsync(),
             await Db.Table<BudgetItem>().ToListAsync(),
             await Db.Table<SalaryRate>().ToListAsync(),
-            await Db.Table<CardSubscription>().ToListAsync());
+            await Db.Table<CardSubscription>().ToListAsync(),
+            await Db.Table<Person>().ToListAsync());
     }
 
     /// <summary>
@@ -874,12 +875,13 @@ public sealed class FinanceService(FinanceDatabase database)
     public async Task AddPersonalDebtAsync(PersonalDebt debt)
     {
         await database.InitAsync();
-        if (string.IsNullOrWhiteSpace(debt.PersonName)) throw new FinanceException("Err_Name");
         if (debt.Amount <= 0) throw new FinanceException("Err_Amount");
         if (debt.Direction == DebtDirection.Lent && debt.AccountId is null && debt.CardId is null) throw new FinanceException("Err_Account");
+        var person = await PersonForAsync(debt);
+        debt.PersonId = person.Id;
+        debt.PersonName = person.Name;
         if (debt.Direction == DebtDirection.Borrowed) debt.CardId = null;
         if (debt.CardId is not null) debt.AccountId = null; // lent through a card (ADR 0040)
-        debt.PersonName = debt.PersonName.Trim();
 
         await Db.RunInTransactionAsync(c =>
         {
@@ -919,13 +921,14 @@ public sealed class FinanceService(FinanceDatabase database)
     {
         var s = await LoadAsync();
         var t = s.Transactions.FirstOrDefault(x => x.Id == transactionId) ?? throw new FinanceException("Err_NotFound");
-        if (string.IsNullOrWhiteSpace(debt.PersonName)) throw new FinanceException("Err_Name");
         var allowed = debt.Direction == DebtDirection.Lent
             ? t.Type is TransactionType.Expense or TransactionType.CardPurchase
             : t.Type == TransactionType.Income;
         if (!allowed || t.DebtId is not null) throw new FinanceException("Err_ConvertNotAllowed");
 
-        debt.PersonName = debt.PersonName.Trim();
+        var person = await PersonForAsync(debt);
+        debt.PersonId = person.Id;
+        debt.PersonName = person.Name;
         debt.Amount = t.Amount;
         debt.Date = t.Date;
         debt.AccountId = t.Type == TransactionType.CardPurchase ? null : t.AccountId;
@@ -981,6 +984,87 @@ public sealed class FinanceService(FinanceDatabase database)
         });
     }
 
+    // ---------- People (ADR 0042) ----------
+
+    /// <summary>"+ Add person": a new person; a name that already exists (any letter case) is refused.</summary>
+    public async Task<Person> AddPersonAsync(string name)
+    {
+        await database.InitAsync();
+        if (string.IsNullOrWhiteSpace(name)) throw new FinanceException("Err_Name");
+        name = name.Trim();
+        var people = await Db.Table<Person>().ToListAsync();
+        if (people.Any(p => string.Equals(p.Name.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+            throw new FinanceException("Err_PersonExists");
+        var person = new Person { Name = name };
+        await Db.InsertAsync(person);
+        return person;
+    }
+
+    /// <summary>The person of a new debt: the chosen one, or (older callers) found / made from the typed name.</summary>
+    private async Task<Person> PersonForAsync(PersonalDebt debt)
+    {
+        if (debt.PersonId is { } id && await Db.FindAsync<Person>(id) is { } chosen) return chosen;
+        if (string.IsNullOrWhiteSpace(debt.PersonName)) throw new FinanceException("Err_Person");
+        var name = debt.PersonName.Trim();
+        return (await Db.Table<Person>().ToListAsync())
+                   .FirstOrDefault(p => string.Equals(p.Name.Trim(), name, StringComparison.OrdinalIgnoreCase))
+               ?? await AddPersonAsync(name);
+    }
+
+    /// <summary>
+    /// A person pays back (part of) what they owe you in total (ADR 0042): it settles their lends oldest first,
+    /// e.g. ৳4,000 back from someone with lends of ৳3,000 and ৳2,000 → the first fully paid, ৳1,000 off the second.
+    /// </summary>
+    public async Task ReceiveFromPersonAsync(int personId, long amount, int accountId, DateTime date)
+    {
+        var s = await LoadAsync();
+        if (amount <= 0) throw new FinanceException("Err_Amount");
+        var open = s.Debts.Where(d => d.PersonId == personId && d.Direction == DebtDirection.Lent)
+            .Select(d => (Debt: d, Left: s.LendRemaining(d))).Where(x => x.Left > 0)
+            .OrderBy(x => x.Debt.Date).ThenBy(x => x.Debt.Id).ToList();
+        if (amount > open.Sum(x => x.Left)) throw new FinanceException("Err_TooMuch");
+
+        var left = amount;
+        var returns = new List<Transaction>();
+        foreach (var (debt, owed) in open)
+        {
+            if (left == 0) break;
+            var part = Math.Min(left, owed);
+            returns.Add(new Transaction
+            {
+                Date = date, Amount = part, Type = TransactionType.LendReturn,
+                AccountId = accountId, DebtId = debt.Id, Note = debt.PersonName
+            });
+            left -= part;
+        }
+        await Db.RunInTransactionAsync(c => c.InsertAll(returns));
+    }
+
+    /// <summary>
+    /// "Gift it" (ADR 0044): what a person still owes you (or <paramref name="amount"/> of it) is not taken back.
+    /// Their lends are closed oldest first with a gift entry; no account moves, it is not income or spending.
+    /// </summary>
+    public async Task GiftToPersonAsync(int personId, long amount, DateTime date)
+    {
+        var s = await LoadAsync();
+        if (amount <= 0) throw new FinanceException("Err_Amount");
+        var open = s.Debts.Where(d => d.PersonId == personId && d.Direction == DebtDirection.Lent)
+            .Select(d => (Debt: d, Left: s.LendRemaining(d))).Where(x => x.Left > 0)
+            .OrderBy(x => x.Debt.Date).ThenBy(x => x.Debt.Id).ToList();
+        if (amount > open.Sum(x => x.Left)) throw new FinanceException("Err_TooMuch");
+
+        var left = amount;
+        var gifts = new List<Transaction>();
+        foreach (var (debt, owed) in open)
+        {
+            if (left == 0) break;
+            var part = Math.Min(left, owed);
+            gifts.Add(new Transaction { Date = date, Amount = part, Type = TransactionType.LendGift, DebtId = debt.Id, Note = "Gift" });
+            left -= part;
+        }
+        await Db.RunInTransactionAsync(c => c.InsertAll(gifts));
+    }
+
     /// <summary>Someone returns (part of) the money you lent them.</summary>
     public async Task ReceiveLendReturnAsync(int debtId, long amount, int accountId, DateTime date)
     {
@@ -1024,7 +1108,7 @@ public sealed class FinanceService(FinanceDatabase database)
             CreatedAt = now,
             Accounts = s.Accounts, Categories = s.Categories, Transactions = s.Transactions,
             Loans = s.Loans, Cards = s.Cards, Bills = s.Bills, Debts = s.Debts, Dues = s.Dues,
-            Budget = s.Budget, SalaryRates = s.SalaryRates ?? [], Subscriptions = s.Subscriptions ?? []
+            Budget = s.Budget, SalaryRates = s.SalaryRates ?? [], Subscriptions = s.Subscriptions ?? [], People = s.People ?? []
         };
     }
 
@@ -1037,6 +1121,7 @@ public sealed class FinanceService(FinanceDatabase database)
             c.DeleteAll<BudgetItem>();
             c.DeleteAll<SalaryRate>();
             c.DeleteAll<CardSubscription>();
+            c.DeleteAll<Person>();
             c.Execute("DELETE FROM AppMeta WHERE Key LIKE 'sub:%'");
             c.Execute("DELETE FROM AppMeta WHERE Key LIKE 'salary:%'"); // the backup's months are marked again below
             c.DeleteAll<Due>();
@@ -1060,6 +1145,8 @@ public sealed class FinanceService(FinanceDatabase database)
             foreach (var x in data.Budget) c.InsertOrReplace(x);
             foreach (var x in data.SalaryRates) c.InsertOrReplace(x);
             foreach (var x in data.Subscriptions) c.InsertOrReplace(x);
+            foreach (var x in data.People) c.InsertOrReplace(x);
+            FinanceDatabase.LinkPeople(c); // an older backup: people from the debts' names
         });
     }
 }

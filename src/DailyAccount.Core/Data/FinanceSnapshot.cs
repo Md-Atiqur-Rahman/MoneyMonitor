@@ -29,7 +29,7 @@ public sealed record LoanInMonth(int PaidCount, long PaidAmount, long Remaining,
 }
 
 /// <summary>One step of a personal debt (ADR 0040): the money given, or a part paid back.</summary>
-public sealed record DebtStep(DateTime Date, long Amount, bool IsGiven, int? AccountId, int? CardId);
+public sealed record DebtStep(DateTime Date, long Amount, bool IsGiven, int? AccountId, int? CardId, bool IsGift = false);
 
 /// <summary>
 /// A personal debt in full (ADR 0040): lent to someone or borrowed from someone, how much has come / gone back,
@@ -39,7 +39,27 @@ public sealed record DebtLedger(PersonalDebt Debt, long Total, long PaidBack, Li
 {
     public long Left => Math.Max(0, Total - PaidBack);
     public bool IsFullyPaid => Left == 0;
+    /// <summary>Part of <see cref="PaidBack"/> that was given as a gift instead (ADR 0044).</summary>
+    public long Gifted => Steps.Where(x => x.IsGift).Sum(x => x.Amount);
+    /// <summary>The day it was settled (last payment or gift), when it is.</summary>
+    public DateTime? SettledOn => IsFullyPaid ? LastPayment ?? Debt.Date : null;
     public DateTime? LastPayment => Steps.Where(x => !x.IsGiven).Select(x => (DateTime?)x.Date).DefaultIfEmpty(null).Max();
+}
+
+/// <summary>One person with all their debts (ADR 0042), so two lends to the same person add up.</summary>
+public sealed record PersonLedger(Person Person, List<DebtLedger> Lent, List<DebtLedger> Borrowed)
+{
+    public long LentTotal => Lent.Sum(l => l.Total);
+    public long LentBack => Lent.Sum(l => l.PaidBack);
+    public long LentLeft => Lent.Sum(l => l.Left);
+    public long BorrowedTotal => Borrowed.Sum(l => l.Total);
+    public long Repaid => Borrowed.Sum(l => l.PaidBack);
+    public long BorrowedLeft => Borrowed.Sum(l => l.Left);
+    public long LentGifted => Lent.Sum(l => l.Gifted);
+
+    /// <summary>All their lends settled: the day the last one was (ADR 0044); null while something is open.</summary>
+    public DateTime? LentSettledOn => Lent.Count > 0 && LentLeft == 0 ? Lent.Max(l => l.SettledOn) : null;
+    public DateTime? BorrowedSettledOn => Borrowed.Count > 0 && BorrowedLeft == 0 ? Borrowed.Max(l => l.SettledOn) : null;
 }
 
 /// <summary>A card's payment of one month (ADR 0037): everything due on it, what was paid, and when.</summary>
@@ -68,7 +88,8 @@ public sealed record FinanceSnapshot(
     List<Due> Dues,
     List<BudgetItem> Budget,
     List<SalaryRate>? SalaryRates = null,
-    List<CardSubscription>? Subscriptions = null)
+    List<CardSubscription>? Subscriptions = null,
+    List<Person>? People = null)
 {
     /// <summary>
     /// Everything about one personal debt (ADR 0040). Lent: given = the money out (cash/bank or card), paid back =
@@ -83,8 +104,8 @@ public sealed record FinanceSnapshot(
                 .Where(t => t.DebtId == debt.Id && t.Type is TransactionType.LendOut or TransactionType.CardPurchase)
                 .Select(t => new DebtStep(t.Date, t.Amount, true, t.AccountId, t.CardId)));
             steps.AddRange(Transactions
-                .Where(t => t.DebtId == debt.Id && t.Type == TransactionType.LendReturn)
-                .Select(t => new DebtStep(t.Date, t.Amount, false, t.AccountId, null)));
+                .Where(t => t.DebtId == debt.Id && t.Type is TransactionType.LendReturn or TransactionType.LendGift)
+                .Select(t => new DebtStep(t.Date, t.Amount, false, t.AccountId, null, t.Type == TransactionType.LendGift)));
         }
         else
         {
@@ -100,6 +121,21 @@ public sealed record FinanceSnapshot(
         if (!steps.Any(x => x.IsGiven)) steps.Add(new DebtStep(debt.Date, debt.Amount, true, debt.AccountId, debt.CardId));
         steps = [.. steps.OrderBy(x => x.Date).ThenBy(x => !x.IsGiven)];
         return new DebtLedger(debt, debt.Amount, steps.Where(x => !x.IsGiven).Sum(x => x.Amount), steps);
+    }
+
+    /// <summary>
+    /// Each person with all their debts (ADR 0042): what was lent to them / borrowed from them in total, paid back,
+    /// left. Still open first, then by name.
+    /// </summary>
+    public List<PersonLedger> PeopleLedgers()
+    {
+        var ledgers = Debts.Select(Ledger).ToList();
+        return [.. (People ?? [])
+            .Select(p => new PersonLedger(p,
+                [.. ledgers.Where(l => l.Debt.PersonId == p.Id && l.Debt.Direction == DebtDirection.Lent).OrderBy(l => l.Debt.Date)],
+                [.. ledgers.Where(l => l.Debt.PersonId == p.Id && l.Debt.Direction == DebtDirection.Borrowed).OrderBy(l => l.Debt.Date)]))
+            .Where(p => p.Lent.Count + p.Borrowed.Count > 0)
+            .OrderBy(p => p.LentLeft + p.BorrowedLeft == 0).ThenBy(p => p.Person.Name)];
     }
 
     /// <summary>All personal debts, still open first, then the newest (Reports → Lent &amp; borrowed).</summary>
@@ -154,7 +190,7 @@ public sealed record FinanceSnapshot(
 
     /// <summary>What a lent amount still has to come back.</summary>
     public long LendRemaining(PersonalDebt debt) =>
-        debt.Amount - Transactions.Where(t => t.Type == TransactionType.LendReturn && t.DebtId == debt.Id).Sum(t => t.Amount);
+        debt.Amount - Transactions.Where(t => t.Type is TransactionType.LendReturn or TransactionType.LendGift && t.DebtId == debt.Id).Sum(t => t.Amount);
 
     public MonthSummary Summary(string month) => MonthSummaryService.Summarize(month, Transactions, Dues);
 

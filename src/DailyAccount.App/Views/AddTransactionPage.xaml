@@ -34,12 +34,15 @@
                 <Label Text="{Binding Hint}" TextColor="{StaticResource Info}" FontSize="14" />
             </Border>
 
-            <!-- Person (borrow / lend) -->
+            <!-- Person (borrow / lend): chosen from the list, "+ Add person" (ADR 0042) -->
             <VerticalStackLayout Spacing="6" IsVisible="{Binding ShowPerson}">
-                <Label Text="{loc:Tr PersonName}" Style="{StaticResource Caption}" />
-                <Border Style="{StaticResource Field}">
-                    <Entry Text="{Binding PersonName}" />
-                </Border>
+                <Label Text="{loc:Tr Person}" Style="{StaticResource Caption}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Border Style="{StaticResource Field}">
+                        <Picker ItemsSource="{Binding People}" SelectedItem="{Binding SelectedPerson}" Title="{loc:Tr Person_Choose}" />
+                    </Border>
+                    <Button Grid.Column="1" Text="{loc:Tr Person_Add}" Command="{Binding NewPersonCommand}" Style="{StaticResource SmallOutline}" VerticalOptions="Center" />
+                </Grid>
             </VerticalStackLayout>
 
             <!-- Category -->

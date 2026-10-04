@@ -30,7 +30,12 @@ public enum TransactionType
     /// <summary>Money lent to a person, paid out of an account.</summary>
     LendOut,
     /// <summary>Lent money returned to an account.</summary>
-    LendReturn
+    LendReturn,
+    /// <summary>
+    /// The rest of lent money given as a gift (ADR 0044): it closes the lend; no account moves and it is
+    /// neither income nor spending.
+    /// </summary>
+    LendGift
 }
 
 public enum DueSource

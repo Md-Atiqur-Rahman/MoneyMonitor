@@ -111,9 +111,18 @@ public class RecurringBill
     public bool IsActive { get; set; } = true;
 }
 
+/// <summary>Someone money is lent to or borrowed from (ADR 0042): one entry per person, chosen from a list.</summary>
+public class Person
+{
+    [PrimaryKey, AutoIncrement] public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
 public class PersonalDebt
 {
     [PrimaryKey, AutoIncrement] public int Id { get; set; }
+    /// <summary>The person (ADR 0042). <see cref="PersonName"/> is kept as their name for display.</summary>
+    [Indexed] public int? PersonId { get; set; }
     public string PersonName { get; set; } = "";
     public DebtDirection Direction { get; set; }
     public long Amount { get; set; }

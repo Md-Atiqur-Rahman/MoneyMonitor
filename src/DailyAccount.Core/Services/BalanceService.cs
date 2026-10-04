@@ -32,7 +32,7 @@ public static class BalanceService
     public static long Receivables(IEnumerable<PersonalDebt> debts, IEnumerable<Transaction> transactions)
     {
         var returned = transactions
-            .Where(t => t.Type == TransactionType.LendReturn && t.DebtId is not null)
+            .Where(t => t.Type is TransactionType.LendReturn or TransactionType.LendGift && t.DebtId is not null)
             .GroupBy(t => t.DebtId!.Value)
             .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
 

@@ -103,6 +103,11 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance, MonthSt
     [ObservableProperty] private List<DebtRow> _borrowed = [];
     [ObservableProperty] private List<DebtRow> _lent = [];
     [ObservableProperty] private List<SubscriptionRow> _subscriptions = [];
+    // Totals next to "You borrowed" / "You lent" (ADR 0043 note): the amount, and what is still left.
+    [ObservableProperty] private string _borrowedTotal = "";
+    [ObservableProperty] private string _borrowedNote = "";
+    [ObservableProperty] private string _lentTotal = "";
+    [ObservableProperty] private string _lentNote = "";
     public bool SubscriptionsEmpty => Subscriptions.Count == 0;
     [ObservableProperty] private List<PurchaseGroup> _pastPurchases = [];
 
@@ -156,7 +161,15 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance, MonthSt
         OnPropertyChanged(nameof(PastEmpty));
         OnPropertyChanged(nameof(ThisEmpty));
 
-        Borrowed = s.Debts.Where(d => d.Direction == DebtDirection.Borrowed && d.Date.Date <= today).Select(d =>
+        var borrowedSoFar = s.Debts.Where(d => d.Direction == DebtDirection.Borrowed && d.Date.Date <= today).Select(s.Ledger).ToList();
+        var lentSoFar = s.Debts.Where(d => d.Direction == DebtDirection.Lent && d.Date.Date <= today).Select(s.Ledger).ToList();
+        BorrowedTotal = Fmt.Money(borrowedSoFar.Sum(l => l.Total));
+        BorrowedNote = Loc.F("Personal_BorrowedNote", Fmt.Money(borrowedSoFar.Sum(l => l.PaidBack)), Fmt.Money(borrowedSoFar.Sum(l => l.Left)));
+        LentTotal = Fmt.Money(lentSoFar.Sum(l => l.Total));
+        LentNote = Loc.F("Personal_LentNote", Fmt.Money(lentSoFar.Sum(l => l.PaidBack)), Fmt.Money(lentSoFar.Sum(l => l.Left)));
+
+        Borrowed = s.Debts.Where(d => d.Direction == DebtDirection.Borrowed && d.Date.Date <= today)
+            .Where(d => s.Ledger(d) is var l && (!l.IsFullyPaid || SettledIn(l.SettledOn))).Select(d =>
         {
             var due = s.DueFor(DueSource.Personal, d.Id);
             var left = due?.Remaining ?? 0;
@@ -172,21 +185,35 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance, MonthSt
                 Loc.T("Debt_ChangeMonth"),
                 left > 0 ? new AsyncRelayCommand(() => ChangePayMonthAsync(d, payMonth)) : null,
                 Display.DebtProgress(s.Ledger(d)),
-                new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=debt&debtId={d.Id}")));
+                new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=person&personId={d.PersonId}")));
         }).ToList();
 
-        Lent = s.Debts.Where(d => d.Direction == DebtDirection.Lent && d.Date.Date <= today).Select(d =>
+        // One row per person (ADR 0042): all their lends add up; "Money returned" settles the oldest first.
+        // Open ones, and ones settled in the month shown; later they are only in Reports (ADR 0044).
+        bool SettledIn(DateTime? on) => on is { } d && MonthKey.Contains(month, d);
+        Lent = s.PeopleLedgers()
+            .Where(p => p.Lent.Any(l => l.Debt.Date.Date <= today) && (p.LentLeft > 0 || SettledIn(p.LentSettledOn)))
+            .Select(p =>
         {
-            var left = s.LendRemaining(d);
-            var how = d.CardId is { } cardId ? Loc.F("Debt_ByCard", s.Cards.FirstOrDefault(c => c.Id == cardId)?.Name ?? "")
-                : Display.AccountName(d.AccountId, s);
-            return new DebtRow(d.PersonName,
-                Loc.F("Debt_LentSub", Fmt.Money(d.Amount), Fmt.Date(d.Date)) + (how.Length > 0 ? " · " + how : ""),
+            var lends = p.Lent.Where(l => l.Debt.Date.Date <= today).ToList();
+            var left = lends.Sum(l => l.Left);
+            var hows = lends.Select(l => l.Debt.CardId is { } cardId
+                    ? Loc.F("Debt_ByCard", s.Cards.FirstOrDefault(c => c.Id == cardId)?.Name ?? "")
+                    : Display.AccountName(l.Debt.AccountId, s))
+                .Where(h => h.Length > 0).Distinct();
+            var sub = (lends.Count == 1
+                          ? Loc.F("Debt_LentSub", Fmt.Money(lends[0].Total), Fmt.Date(lends[0].Debt.Date))
+                          : Loc.F("Debt_LentTimes", Fmt.Money(lends.Sum(l => l.Total)), Fmt.Number(lends.Count)))
+                      + (hows.Any() ? " · " + string.Join(", ", hows) : "");
+            var total = new DebtLedger(lends[0].Debt, lends.Sum(l => l.Total), lends.Sum(l => l.PaidBack), [.. lends.SelectMany(l => l.Steps)]);
+            return new DebtRow(p.Person.Name, sub,
                 left > 0 ? Fmt.Money(left) : Loc.T("Debt_Settled"), Display.Positive,
                 Loc.T("MoneyReturned"),
-                left > 0 ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.Pay}?debtId={d.Id}")) : null,
-                Progress: Display.DebtProgress(s.Ledger(d)),
-                Open: new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=debt&debtId={d.Id}")));
+                left > 0 ? new AsyncRelayCommand(() => Ui.Go($"{AppShell.Pay}?personId={p.Person.Id}")) : null,
+                Loc.T("Gift_Button"),
+                left > 0 ? new AsyncRelayCommand(() => GiftAsync(p.Person, left)) : null,
+                Progress: Display.DebtProgress(total),
+                Open: new AsyncRelayCommand(() => Ui.Go($"{AppShell.Flow}?kind=person&personId={p.Person.Id}")));
         }).ToList();
 
         Subscriptions = (s.Subscriptions ?? []).OrderBy(x => x.StopMonth is not null).ThenBy(x => x.Name).Select(x =>
@@ -427,6 +454,15 @@ public sealed partial class LiabilitiesViewModel(FinanceService finance, MonthSt
         var from = await Ui.Choose(Loc.F("Sub_AskStop", sub.Name), [.. months.Keys]);
         if (from is null) return;
         if (await Ui.Try(() => finance.StopSubscriptionAsync(sub.Id, months[from]))) await LoadAsync();
+    }
+
+    /// <summary>"Gift it" (ADR 0044): the rest isn't taken back; asks how much (all by default) and confirms.</summary>
+    private async Task GiftAsync(Person person, long left)
+    {
+        var amount = await Ui.PromptMoney(Loc.F("Gift_Ask", person.Name), left);
+        if (amount is not > 0) return;
+        if (!await Ui.Confirm(Loc.F("Gift_Confirm", Fmt.Money(amount.Value), person.Name))) return;
+        if (await Ui.Try(() => finance.GiftToPersonAsync(person.Id, amount.Value, months.AsOf))) await LoadAsync();
     }
 
     private async Task DeleteLoanAsync(Loan loan)

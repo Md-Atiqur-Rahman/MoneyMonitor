@@ -39,11 +39,13 @@ public sealed class FinanceDatabase
             await Connection.CreateTableAsync<AppMeta>();
             await Connection.CreateTableAsync<SalaryRate>();
             await Connection.CreateTableAsync<CardSubscription>();
+            await Connection.CreateTableAsync<Person>();
 
             if (await Connection.Table<Category>().CountAsync() == 0)
                 await Connection.RunInTransactionAsync(SeedCategories);
             if (await Connection.FindAsync<AppMeta>(CategoryOrderKey) is null)
                 await Connection.RunInTransactionAsync(UpdateDefaultCategories);
+            await Connection.RunInTransactionAsync(LinkPeople);
 
             _initialized = true;
         }
@@ -135,6 +137,30 @@ public sealed class FinanceDatabase
             c.Update(own);
         }
         c.InsertOrReplace(new AppMeta { Key = CategoryOrderKey, Value = "done" });
+    }
+
+    /// <summary>
+    /// Every personal debt belongs to a <see cref="Person"/> (ADR 0042): a debt without one (older data, an older
+    /// backup) gets the person with the same name — any letter case — or a new one. Safe to run every time.
+    /// </summary>
+    public static void LinkPeople(SQLiteConnection c)
+    {
+        var people = c.Table<Person>().ToList();
+        foreach (var debt in c.Table<PersonalDebt>().ToList())
+        {
+            if (debt.PersonId is { } id && people.Any(p => p.Id == id)) continue;
+            var name = debt.PersonName.Trim();
+            var person = people.FirstOrDefault(p => string.Equals(p.Name.Trim(), name, StringComparison.OrdinalIgnoreCase));
+            if (person is null)
+            {
+                person = new Person { Name = name };
+                c.Insert(person);
+                people.Add(person);
+            }
+            debt.PersonId = person.Id;
+            debt.PersonName = person.Name;
+            c.Update(debt);
+        }
     }
 
     private static void SeedCategories(SQLiteConnection c)

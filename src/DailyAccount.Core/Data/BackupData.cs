@@ -24,6 +24,8 @@ public sealed class BackupData
     public List<SalaryRate> SalaryRates { get; set; } = [];
     /// <summary>Monthly card purchases that repeat by themselves (ADR 0038); missing in older files.</summary>
     public List<CardSubscription> Subscriptions { get; set; } = [];
+    /// <summary>People (ADR 0042); missing in older files — then made from the debts' names.</summary>
+    public List<Person> People { get; set; } = [];
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 

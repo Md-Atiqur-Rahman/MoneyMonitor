@@ -28,7 +28,7 @@
 
             <Label Text="{Binding Hint}" Style="{StaticResource Muted}" />
 
-            <Border Style="{StaticResource Card}" Padding="16,6">
+            <Border Style="{StaticResource Card}" Padding="16,6" IsVisible="{Binding HasOneList}">
                 <VerticalStackLayout>
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}">
                         <BindableLayout.ItemTemplate>
@@ -54,6 +54,42 @@
                 </VerticalStackLayout>
             </Border>
 
+
+            <!-- Groups with their own totals: You lent, then You borrowed (ADR 0043) -->
+            <VerticalStackLayout Spacing="14" IsVisible="{Binding HasSections}" BindableLayout.ItemsSource="{Binding Sections}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FlowSection">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="{Binding Title}" Style="{StaticResource H2}" />
+                            <Border Style="{StaticResource Card}" Padding="16,6">
+                                <VerticalStackLayout>
+                                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Rows}">
+                                        <BindableLayout.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FlowRow">
+                                                <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" Padding="0,10">
+                                                    <Grid.GestureRecognizers>
+                                                        <TapGestureRecognizer Command="{Binding Tap}" />
+                                                    </Grid.GestureRecognizers>
+                                                    <Label Text="{Binding Title}" FontAttributes="Bold" />
+                                                    <Label Grid.Row="1" Text="{Binding Subtitle}" Style="{StaticResource Muted}" IsVisible="{Binding HasSubtitle}" />
+                                                    <Label Grid.Column="1" Grid.RowSpan="2" Text="{Binding Amount}" Style="{StaticResource Amount}" VerticalOptions="Center" />
+                                                    <Label Grid.Column="2" Grid.RowSpan="2" Text="›" FontSize="22" TextColor="{StaticResource Muted}" VerticalOptions="Center" IsVisible="{Binding CanTap}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </BindableLayout.ItemTemplate>
+                                    </VerticalStackLayout>
+                                    <BoxView Style="{StaticResource Divider}" Margin="0,4" />
+                                    <Grid ColumnDefinitions="*,Auto" Padding="0,8">
+                                        <Label Text="{Binding TotalLabel}" FontAttributes="Bold" FontSize="16" />
+                                        <Label Grid.Column="1" Text="{Binding Total}" FontAttributes="Bold" FontSize="18" />
+                                    </Grid>
+                                    <Label Text="{Binding Note}" Style="{StaticResource Muted}" Margin="0,0,0,8" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </VerticalStackLayout>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
 </views:AppPage>

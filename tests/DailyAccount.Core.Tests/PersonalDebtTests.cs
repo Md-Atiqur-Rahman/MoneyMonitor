@@ -125,4 +125,88 @@ public sealed class PersonalDebtTests : IAsyncLifetime
         Assert.Equal("Err_ConvertNotAllowed", (await Assert.ThrowsAsync<FinanceException>(() =>
             _svc.ConvertToDebtAsync(purchase.Id, new PersonalDebt { PersonName = "X", Direction = DebtDirection.Lent }))).Key);
     }
+
+    [Fact]
+    public async Task One_person_adds_up_all_their_lends_and_pays_back_oldest_first()
+    {
+        var father = await _svc.AddPersonAsync("Father");
+        Assert.Equal("Err_PersonExists", (await Assert.ThrowsAsync<FinanceException>(() => _svc.AddPersonAsync(" father "))).Key);
+
+        await _svc.AddPersonalDebtAsync(new PersonalDebt { PersonId = father.Id, Direction = DebtDirection.Lent, Amount = Tk(3_000), Date = new DateTime(2026, 9, 29), CardId = _card.Id });
+        await _svc.AddPersonalDebtAsync(new PersonalDebt { PersonId = father.Id, Direction = DebtDirection.Lent, Amount = Tk(2_000), Date = new DateTime(2026, 9, 26), CardId = _card.Id });
+        var s = await _svc.LoadAsync();
+        var p = Assert.Single(s.PeopleLedgers());
+        Assert.Equal("Father", p.Person.Name);
+        Assert.Equal(Tk(5_000), p.LentTotal);
+        Assert.Equal(2, p.Lent.Count);
+        Assert.All(s.Debts, d => Assert.Equal("Father", d.PersonName));
+
+        // He pays back 2,500: the older lend (26 Sept, 2,000) is settled first, 500 off the other.
+        await _svc.ReceiveFromPersonAsync(father.Id, Tk(2_500), _bank.Id, new DateTime(2026, 10, 4));
+        s = await _svc.LoadAsync();
+        p = s.PeopleLedgers().Single();
+        Assert.Equal(Tk(2_500), p.LentBack);
+        Assert.Equal(Tk(2_500), p.LentLeft);
+        Assert.True(p.Lent.Single(l => l.Debt.Amount == Tk(2_000)).IsFullyPaid);
+        Assert.Equal(Tk(2_500), p.Lent.Single(l => l.Debt.Amount == Tk(3_000)).Left);
+        Assert.Equal("Err_TooMuch", (await Assert.ThrowsAsync<FinanceException>(
+            () => _svc.ReceiveFromPersonAsync(father.Id, Tk(3_000), _bank.Id, new DateTime(2026, 10, 5)))).Key);
+    }
+
+    [Fact]
+    public async Task Older_debts_are_linked_to_one_person_by_name()
+    {
+        // Two debts typed with the same name in another letter case (older data / older backup).
+        await _db.Connection.InsertAsync(new PersonalDebt { PersonName = "Uncle", Direction = DebtDirection.Lent, Amount = Tk(100), Date = new DateTime(2026, 9, 1) });
+        await _db.Connection.InsertAsync(new PersonalDebt { PersonName = "uncle ", Direction = DebtDirection.Lent, Amount = Tk(200), Date = new DateTime(2026, 9, 2) });
+        await _db.Connection.RunInTransactionAsync(FinanceDatabase.LinkPeople);
+
+        var s = await _svc.LoadAsync();
+        var person = Assert.Single(s.People!);
+        Assert.All(s.Debts, d => Assert.Equal(person.Id, d.PersonId));
+        Assert.Equal(Tk(300), s.PeopleLedgers().Single().LentTotal);
+
+        // Backup and restore keep them together.
+        await _svc.ImportAsync(BackupData.FromJson((await _svc.ExportAsync(DateTime.Now)).ToJson()));
+        Assert.Single((await _svc.LoadAsync()).PeopleLedgers());
+    }
+
+    [Fact]
+    public async Task Gifting_closes_what_is_left_without_income_or_spending()
+    {
+        var father = await _svc.AddPersonAsync("Father");
+        await _svc.AddPersonalDebtAsync(new PersonalDebt { PersonId = father.Id, Direction = DebtDirection.Lent, Amount = Tk(2_000), Date = new DateTime(2026, 9, 26), AccountId = _cash.Id });
+        await _svc.AddPersonalDebtAsync(new PersonalDebt { PersonId = father.Id, Direction = DebtDirection.Lent, Amount = Tk(3_000), Date = new DateTime(2026, 9, 29), AccountId = _cash.Id });
+        await _svc.ReceiveFromPersonAsync(father.Id, Tk(1_000), _bank.Id, new DateTime(2026, 10, 2));
+        var before = await _svc.LoadAsync();
+
+        // The 4,000 still owed is given as a gift.
+        await _svc.GiftToPersonAsync(father.Id, Tk(4_000), new DateTime(2026, 10, 5));
+        var s = await _svc.LoadAsync();
+        var p = s.PeopleLedgers().Single();
+        Assert.Equal(0, p.LentLeft);
+        Assert.Equal(Tk(4_000), p.LentGifted);
+        Assert.Equal(new DateTime(2026, 10, 5), p.LentSettledOn);
+        Assert.Equal(0, s.Receivables);
+
+        // No account moved, nothing became income or spending.
+        Assert.Equal(before.TotalBalance, s.TotalBalance);
+        Assert.Equal(before.Plan("2026-10", 0).Income, s.Plan("2026-10", 0).Income);
+        Assert.Equal(before.Summary("2026-10").TotalSpending, s.Summary("2026-10").TotalSpending);
+        Assert.Equal(before.CashFlow("2026-10").Net, s.CashFlow("2026-10").Net);
+
+        Assert.Equal("Err_TooMuch", (await Assert.ThrowsAsync<FinanceException>(
+            () => _svc.GiftToPersonAsync(father.Id, Tk(1), new DateTime(2026, 10, 6)))).Key);
+    }
+
+    [Fact]
+    public async Task A_repaid_borrowing_knows_when_it_was_settled()
+    {
+        var friend = await _svc.AddPersonAsync("Friend");
+        await _svc.AddPersonalDebtAsync(new PersonalDebt { PersonId = friend.Id, Direction = DebtDirection.Borrowed, Amount = Tk(1_000), Date = new DateTime(2026, 9, 1), AccountId = _bank.Id });
+        var s = await _svc.LoadAsync();
+        Assert.Null(s.PeopleLedgers().Single().BorrowedSettledOn);
+        await _svc.PayDueAsync(s.DueFor(DueSource.Personal, s.Debts.Single().Id)!.Id, Tk(1_000), _bank.Id, new DateTime(2026, 10, 3));
+        Assert.Equal(new DateTime(2026, 10, 3), (await _svc.LoadAsync()).PeopleLedgers().Single().BorrowedSettledOn);
+    }
 }

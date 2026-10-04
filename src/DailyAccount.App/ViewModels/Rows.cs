@@ -176,7 +176,10 @@ public static class Display
 
     /// <summary>"Paid back ৳3,000 of ৳5,000 · left ৳2,000", "Fully paid · last on 9 Oct" (ADR 0040).</summary>
     public static string DebtProgress(DebtLedger l) => l.IsFullyPaid
-        ? Loc.T("Debt_FullyPaid") + (l.LastPayment is { } on ? " · " + Loc.F("Debt_LastOn", Fmt.DayMonth(on)) : "")
+        ? (l.Gifted == 0 ? Loc.T("Debt_FullyPaid")
+            : l.Gifted == l.Total ? Loc.F("Debt_Gifted", Fmt.Money(l.Gifted))
+            : Loc.F("Debt_BackAndGifted", Fmt.Money(l.PaidBack - l.Gifted), Fmt.Money(l.Gifted)))
+          + (l.LastPayment is { } on ? " · " + Loc.F("Debt_LastOn", Fmt.DayMonth(on)) : "")
         : l.PaidBack == 0
             ? Loc.T(l.Debt.Direction == DebtDirection.Lent ? "Debt_NothingBackYet" : "Debt_NothingRepaidYet")
             : Loc.F(l.Debt.Direction == DebtDirection.Lent ? "Debt_BackOf" : "Debt_RepaidOf",
@@ -199,6 +202,7 @@ public static class Display
                 ? Loc.F("TransferTo", AccountName(t.ToAccountId, s))
                 : Loc.F("TransferFrom", AccountName(t.AccountId, s)),
             TransactionType.DuePayment when s.Dues.FirstOrDefault(d => d.Id == t.DueId) is { } due => DueTitle(due, s),
+            TransactionType.LendGift => Loc.F("Tx_GiftTo", s.Debts.FirstOrDefault(d => d.Id == t.DebtId)?.PersonName ?? ""),
             _ => t.Note ?? Loc.T($"Tx_{t.Type}")
         };
 
@@ -214,7 +218,9 @@ public static class Display
             TransactionType.Transfer => 0,
             _ => -t.Amount
         };
-        var amount = effect == 0 && t.Type == TransactionType.Transfer
+        if (t.Type == TransactionType.LendGift) effect = 0; // a gift moves no money (ADR 0044)
+        var amount = t.Type == TransactionType.LendGift ? "🎁 " + Fmt.Money(t.Amount)
+            : effect == 0 && t.Type == TransactionType.Transfer
             ? "↔ " + Fmt.Money(t.Amount)
             : (effect > 0 ? "+" : effect < 0 ? "−" : "") + Fmt.Money(Math.Abs(effect));
 
