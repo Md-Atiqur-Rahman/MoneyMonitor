@@ -61,13 +61,27 @@
                             <Label Grid.Column="1" Text="{Binding Model.CashExpenses}" />
                             <Label Grid.Column="2" Text="›" TextColor="{StaticResource Muted}" />
                         </Grid>
-                        <BoxView Grid.Row="3" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
-                        <Label Grid.Row="4" Text="{loc:Tr Dash_SavedSoFar}" FontAttributes="Bold" />
-                        <Label Grid.Row="4" Grid.Column="1" Text="{Binding Model.SavedSoFar}" FontAttributes="Bold" />
-                        <Label Grid.Row="5" Text="{loc:Tr DuesStill}" Style="{StaticResource Muted}" />
-                        <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.DuesStill}" TextColor="{StaticResource Warn}" />
-                        <Label Grid.Row="6" Text="{loc:Tr ProjectedSavings}" FontAttributes="Bold" />
-                        <Label Grid.Row="6" Grid.Column="1" Text="{Binding Model.ProjectedSavings}" FontAttributes="Bold" TextColor="{StaticResource Primary}" />
+                        <!-- Due this month, same as Home / Dues; opens the Dues page (ADR 0048) -->
+                        <Grid Grid.Row="3" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="6">
+                            <Grid.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding OpenDuesCommand}" />
+                            </Grid.GestureRecognizers>
+                            <Label Text="{loc:Tr DuesStill}" TextDecorations="Underline" />
+                            <Label Grid.Column="1" Text="{Binding Model.DuesStill}" TextColor="{StaticResource Warn}" FontAttributes="Bold" />
+                            <Label Grid.Column="2" Text="›" TextColor="{StaticResource Muted}" />
+                            <Label Grid.Row="1" Grid.ColumnSpan="3" Text="{Binding Model.DuesStillNote}" Style="{StaticResource Muted}" FontSize="12" />
+                        </Grid>
+                        <!-- The result after the due too (user: dues first, then what is saved; ADR 0048 note) -->
+                        <BoxView Grid.Row="4" Grid.ColumnSpan="2" Style="{StaticResource Divider}" />
+                        <Label Grid.Row="5" Text="{loc:Tr Reports_SavedAfterDue}" FontAttributes="Bold" FontSize="17" />
+                        <Label Grid.Row="5" Grid.Column="1" Text="{Binding Model.ProjectedSavings}" FontAttributes="Bold" FontSize="17" TextColor="{StaticResource Primary}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label" Binding="{Binding Model.ProjectedNegative}" Value="True">
+                                    <Setter Property="TextColor" Value="{StaticResource Warn}" />
+                                </DataTrigger>
+                            </Label.Triggers>
+                        </Label>
+                        <Label Grid.Row="6" Grid.ColumnSpan="2" Text="{Binding Model.BeforeDueNote}" Style="{StaticResource Muted}" FontSize="12" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>

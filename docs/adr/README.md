@@ -52,6 +52,7 @@ When a decision changes, add a new ADR that **supersedes** the old one (don't re
 | [0045](0045-dues-liabilities-and-expenses-with-bank-balance.md) | Dues: liabilities and expenses as two groups, with the bank balance | Accepted |
 | [0046](0046-budget-paid-checkmark.md) | A ✓ for paid items on the Budget page | Accepted |
 | [0047](0047-budget-section-totals.md) | Totals for "Payments due this month" and "Spending plan" | Accepted |
+| [0048](0048-reports-due-this-month.md) | Reports: "Due this month" is the same due as Home and Dues | Accepted |
 
 ## Template
 

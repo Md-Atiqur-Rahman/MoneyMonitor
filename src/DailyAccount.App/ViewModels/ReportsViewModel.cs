@@ -15,7 +15,10 @@ public sealed record ReportModel(
     string CashExpenses,
     string SavedSoFar,
     string DuesStill,
+    string DuesStillNote,
     string ProjectedSavings,
+    bool ProjectedNegative,
+    string BeforeDueNote,
     string SpendingTotal,
     string SpendingSub,
     List<BarRow> Categories,
@@ -26,7 +29,7 @@ public sealed record ReportModel(
     public bool NoItems => TopItems.Count == 0;
 }
 
-public sealed partial class ReportsViewModel(FinanceService finance, MonthState months) : ViewModelBase, IQueryAttributable
+public sealed partial class ReportsViewModel(FinanceService finance, MonthState months, AppSettings settings) : ViewModelBase, IQueryAttributable
 {
     /// <summary>The month shown, shared by every page (ADR 0029).</summary>
     private string SelectedMonth { get => months.Month; set => months.Month = value; }
@@ -46,6 +49,8 @@ public sealed partial class ReportsViewModel(FinanceService finance, MonthState 
         var sum = s.Summary(SelectedMonth);
         // Cash flow like the sheet (ADR 0032): money in includes borrowing; each line opens its details.
         var flow = s.CashFlow(SelectedMonth);
+        var due = s.MonthDue(SelectedMonth, settings.ExpectedIncome);
+        var dueLiabilities = s.NonCardDuesUpTo(SelectedMonth).Sum(d => d.Remaining);
 
         var spent = s.Transactions
             .Where(t => t.Type is TransactionType.Expense or TransactionType.CardPurchase && MonthKey.Contains(SelectedMonth, t.Date))
@@ -71,7 +76,7 @@ public sealed partial class ReportsViewModel(FinanceService finance, MonthState 
 
         // Savings trend: the selected month and the five before it.
         var months = Enumerable.Range(0, 6).Select(i => MonthKey.Add(SelectedMonth, i - 5)).ToList();
-        var savings = months.Select(m => (Month: m, Value: s.CashFlow(m).Net - s.Summary(m).DueRemaining)).ToList();
+        var savings = months.Select(m => (Month: m, Value: s.CashFlow(m).Net - s.MonthDue(m, settings.ExpectedIncome))).ToList();
         var maxAbs = Math.Max(1, savings.Max(x => Math.Abs(x.Value)));
 
         Model = new ReportModel(
@@ -80,8 +85,12 @@ public sealed partial class ReportsViewModel(FinanceService finance, MonthState 
             DuesPaid: "−" + Fmt.Money(flow.DuesPaidTotal),
             CashExpenses: "−" + Fmt.Money(flow.CashSpent),
             SavedSoFar: Fmt.Money(flow.Net),
-            DuesStill: "−" + Fmt.Money(sum.DueRemaining),
-            ProjectedSavings: Fmt.Money(flow.Net - sum.DueRemaining),
+            // "Due this month", the same number as Home and the Dues page (ADR 0048).
+            DuesStill: "−" + Fmt.Money(due),
+            DuesStillNote: Loc.F("Reports_DueParts", Fmt.Money(dueLiabilities), Fmt.Money(due - dueLiabilities)),
+            ProjectedSavings: Fmt.Money(flow.Net - due),
+            ProjectedNegative: flow.Net - due < 0,
+            BeforeDueNote: Loc.F("Reports_BeforeDue", Fmt.Money(flow.Net)),
             SpendingTotal: Fmt.Money(sum.TotalSpending),
             SpendingSub: Loc.F("SpendingSub", Fmt.Money(sum.CashExpenses), Fmt.Money(sum.CardSpending)),
             // Tap a category to see its groups (Bajar → Grocery, Meat, Fish…) and items (ADR 0017).
@@ -100,6 +109,10 @@ public sealed partial class ReportsViewModel(FinanceService finance, MonthState 
     private Task OpenFlow(string kind) => Ui.Go($"{AppShell.Flow}?kind={kind}");
 
     /// <summary>Who owes what: every lend and borrow with what is paid back and left (ADR 0040).</summary>
+    /// <summary>"Due this month" → the Dues page of that month (ADR 0048).</summary>
+    [RelayCommand]
+    private Task OpenDues() => Shell.Current.GoToAsync($"//dues?month={SelectedMonth}");
+
     [RelayCommand]
     private Task OpenPeople() => Ui.Go($"{AppShell.Flow}?kind=people");
 
